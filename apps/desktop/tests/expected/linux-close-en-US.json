@@ -1,0 +1,8 @@
+{
+  "message": "Quit DeepSeek Harness?",
+  "detail": "Running tasks will be interrupted.",
+  "buttons": [
+    "Quit",
+    "Cancel"
+  ]
+}

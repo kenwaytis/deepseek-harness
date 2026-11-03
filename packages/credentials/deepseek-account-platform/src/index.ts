@@ -23,7 +23,7 @@ const device = z.object({ id: z.uuid() })
 export interface Config {
   /** Platform origin serving auth-api and browser pages. */
   platformOrigin?: string
-  /** Native desktop identity for Host API and embedded Platform requests; null identifies the client as web. */
+  /** Native desktop identity for Host API and embedded Platform requests; omission or null identifies the client as web. */
   desktopPlatform?: 'darwin' | 'win32' | null
   /** Optional frontend deployment selector for embedded Usage and Top-up pages. */
   embeddedPageDist?: string
@@ -122,7 +122,8 @@ export class PlatformAccount extends DeepSeekAccount {
     }
     this.inferenceOrigin = inference.origin
     this.rewriteBrowserOrigin = resolved.rewriteBrowserOrigin
-    this.platform = resolved.desktopPlatform
+    // Schemastery leaves a null default absent when the field is omitted.
+    this.platform = resolved.desktopPlatform ?? null
     this.requestHeaders = platformHeaders(resolved.requestHeaders)
     const accountHeaders = platformHeaders(resolved.accountRequestHeaders)
     this.accountRequestHeaders = { ...this.requestHeaders, ...accountHeaders }

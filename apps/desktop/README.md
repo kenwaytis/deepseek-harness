@@ -69,7 +69,7 @@ Command registration is optional after installing Desktop. Use **Manage dsh Comm
 
 ## Closing the window and quitting
 
-Closing the main window (macOS close button and ⌘W; Windows ×, Alt+F4, and the taskbar Close window command) hides it; Windows asks for acknowledgement before the first hide. The page and the Host keep running, tasks continue, and the next show presents the same document with its session, drafts, and scroll position; a fullscreen macOS window leaves fullscreen before hiding. The window returns through the Dock icon, a second launch, or `dsh://open` on macOS, and through the tray on Windows. Minimize is unchanged. Closing the welcome window before the workspace opens quits on Windows and, on macOS, keeps the application in the Dock without a window.
+Closing the main window (macOS close button and ⌘W; Windows ×, Alt+F4, and the taskbar Close window command) hides it; Windows asks for acknowledgement before the first hide. The page and the Host keep running, tasks continue, and the next show presents the same document with its session, drafts, and scroll position; a fullscreen macOS window leaves fullscreen before hiding. The window returns through the Dock icon, a second launch, or `dsh://open` on macOS, and through the tray on Windows. Minimize is unchanged. On Linux, closing the main window requests the task-aware quit described below; Cancel keeps the window and its tasks running. Minimize keeps Linux tasks in the background without hiding the window from the desktop. Closing the welcome window before the workspace opens quits on Windows and Linux and, on macOS, keeps the application in the Dock without a window.
 
 Windows keeps a tray icon for the whole run. Its tooltip is the product name, a single click shows and focuses the window, and the context menu offers Open DeepSeek Harness and Quit DeepSeek Harness in the shell locale. Before the first hide, the shared update-dialog overlay explains that running tasks continue and the window can be reopened from the system tray. Confirm hides the window and writes `background-close-confirmed` under Electron userData; Escape, dismissal, or dialog failure keeps the window visible and does not record acknowledgement. Repeated close requests focus the existing shell dialog. In-place updates retain the marker and uninstall removes it. The old `background-notice-shown` marker does not suppress this confirmation. Closing the window sends no system notification. The tray bitmaps are `resources/tray-windows.ico`, rendered from `resources/icon-windows.svg` at 16, 20, 24, 32, 40, 48, and 64 pixels by `pnpm run render:tray-icon`, and packaged as `resources/tray.ico`. macOS ships no menu bar icon.
 
@@ -186,6 +186,12 @@ macOS and Linux GUI launches inherit only the session manager's environment, wit
 ## Develop
 
 Linux x64 supports unpackaged development with the existing Desktop Host, Web UI and Desktop profile. The launcher prepares the locked Linux Primary Runtime, including Python libraries, standalone Node.js and pnpm, under `.desktop-build/targets/linux-x64/runtime`. Linux development runs the Host and package operations with that standalone Node.js and records its version in the disposable project; macOS and Windows use Electron Node mode. This avoids [Linux Electron's GLib symbol conflicts with sharp/libvips](https://sharp.pixelplumbing.com/install/#electron-and-linux) without disabling image processing. The GUI retains Electron's sandbox. Linux development does not enable official packaging, publication or automatic updates; release targets remain macOS and Windows.
+
+Linux Host and embedded Platform requests use the existing `web` client identity, not a macOS identity or an invented Linux value. Browser authorization retains `login_source=desktop` for the return flow. The account protocol has no token-renewal operation; rejected credentials require sign-in again. This client behavior does not establish server support for Linux Desktop accounts or account-specific capabilities. API keys remain available independently of account sign-in.
+
+For an XWayland diagnostic launch from GNOME/Wayland with IBus configured, use `env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 GDK_BACKEND=x11 GTK_IM_MODULE=ibus pnpm run start:desktop`. These variables apply only to that launch. Keep GTK on X11 with an X11-compatible input module: combining X11 with `GTK_IM_MODULE=wayland` can crash GTK's `im-wayland` module before Desktop can show recovery. Ordinary Wayland launches retain the session's input-method settings; Desktop does not rewrite input-module selection. Other input methods need their own compatible configuration, not a forced IBus override.
+
+When diagnosing a native startup crash, inspect `printenv XDG_SESSION_TYPE WAYLAND_DISPLAY DISPLAY GDK_BACKEND GTK_IM_MODULE` alongside the launcher log and the system core report. Unset optional variables are normal. [GTK's environment reference](https://docs.gtk.org/gtk3/running.html#environment-variables) defines backend and input-module selection; do not change global session settings or disable Electron security or GPU acceleration for this conflict.
 
 The development application menu offers Reload Page (Cmd+R on macOS, Ctrl+R elsewhere) and Restart App and Host. Restart waits for Host shutdown before relaunching Electron and starting a new Host; neither action rebuilds source files.
 
@@ -367,7 +373,7 @@ An unpackaged Electron process uses `.desktop-build/development/project` under i
 
 ## Known limitations
 
-- Account sign-in is not connected; the Sign in button is disabled. Windows material rendering still requires platform QA.
+- Windows material rendering still requires platform QA.
 
 - Release signing, notarization, update hosting, and previous-version installed-artifact qualification require the production release environment.
 - Dependency lifecycle scripts follow pnpm’s build permissions; Desktop provides no separate approval dialog.

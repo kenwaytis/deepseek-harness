@@ -1,0 +1,8 @@
+{
+  "message": "退出 DeepSeek Harness？",
+  "detail": "当前正在运行的任务将会中断",
+  "buttons": [
+    "退出",
+    "取消"
+  ]
+}

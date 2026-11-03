@@ -69,7 +69,7 @@ macOS 安装会创建 `/usr/local/bin/dsh`；目录权限需要时，系统会�
 
 ## 关闭窗口与退出
 
-关闭主窗口（macOS 的关闭按钮和 ⌘W；Windows 的 ×、Alt+F4 和任务栏"关闭窗口"）会隐藏窗口；Windows 首次隐藏前需要确认。页面和 Host 继续运行，任务不受影响，下次显示时仍是原来的文档，会话、草稿和滚动位置都保留；macOS 全屏窗口先退出全屏再隐藏。macOS 通过 Dock 图标、再次启动或 `dsh://open` 找回窗口，Windows 通过托盘找回。最小化行为不变。进入工作区前关闭欢迎窗口，Windows 上走退出流程，macOS 上应用留在 Dock 中且没有窗口。
+关闭主窗口（macOS 的关闭按钮和 ⌘W；Windows 的 ×、Alt+F4 和任务栏"关闭窗口"）会隐藏窗口；Windows 首次隐藏前需要确认。页面和 Host 继续运行，任务不受影响，下次显示时仍是原来的文档，会话、草稿和滚动位置都保留；macOS 全屏窗口先退出全屏再隐藏。macOS 通过 Dock 图标、再次启动或 `dsh://open` 找回窗口，Windows 通过托盘找回。最小化行为不变。Linux 上关闭主窗口会请求下文所述的任务感知退出；取消后窗口与任务继续运行。最小化可让 Linux 任务在后台运行，同时保留桌面的窗口入口。进入工作区前关闭欢迎窗口，Windows 和 Linux 上走退出流程，macOS 上应用留在 Dock 中且没有窗口。
 
 Windows 在整个运行期间常驻托盘图标。悬停提示为产品名，单击显示并聚焦窗口，右键菜单提供壳语言下的"打开 DeepSeek Harness"和"退出 DeepSeek Harness"。首次隐藏前复用更新弹窗，显示“正在运行的任务不会中断，可在系统托盘中重新打开窗口”和“确认”按钮。确认后隐藏窗口，并在 Electron userData 下写入 `background-close-confirmed`；Esc、关闭弹窗或加载失败均保持主窗口可见，不记录确认。重复关闭请求会聚焦已有壳弹窗。覆盖更新保留标记，卸载删除标记。旧的 `background-notice-shown` 标记不会跳过此确认。关闭窗口不发送系统通知。托盘位图是 `resources/tray-windows.ico`，由 `pnpm run render:tray-icon` 从 `resources/icon-windows.svg` 按 16、20、24、32、40、48、64 像素分别渲染，打包为 `resources/tray.ico`。macOS 不提供菜单栏图标。
 
@@ -186,6 +186,12 @@ macOS 和 Linux 从图形界面启动的程序只继承会话管理器提供的�
 ## 开发
 
 Linux x64 支持使用现有 Desktop Host、Web UI 和 Desktop Profile 进行未打包开发。启动器在 `.desktop-build/targets/linux-x64/runtime` 下准备锁定的 Linux Primary Runtime，包含 Python 库、独立 Node.js 和 pnpm。Linux 开发使用其中的独立 Node.js 运行 Host 和包操作，并将其版本写入一次性项目；macOS 和 Windows 使用 Electron Node 模式。这可以避开 [Linux Electron 与 sharp/libvips 的 GLib 符号冲突](https://sharp.pixelplumbing.com/install/#electron-and-linux)，而不禁用图片处理。GUI 保留 Electron 沙箱。Linux 开发不启用官方打包、发布或自动更新；发行目标仍为 macOS 和 Windows。
+
+Linux Host 和内嵌 Platform 请求使用现有 `web` 客户端标识，不使用 macOS 标识，也不虚构 Linux 值。浏览器授权保留 `login_source=desktop` 以完成返回流程。账号协议没有 Token 续期操作；凭据被拒绝后需要重新登录。这些客户端行为不能证明服务端支持 Linux Desktop 账号或账号专属能力。API Key 不依赖账号登录，仍可独立使用。
+
+在已配置 IBus 的 GNOME/Wayland 会话中启动 XWayland 诊断实例时，使用 `env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 GDK_BACKEND=x11 GTK_IM_MODULE=ibus pnpm run start:desktop`。这些变量仅作用于本次启动。GTK 必须使用 X11 和兼容 X11 的输入模块：X11 与 `GTK_IM_MODULE=wayland` 组合可能使 GTK 的 `im-wayland` 模块崩溃，Desktop 来不及显示恢复界面。普通 Wayland 启动保留桌面会话的输入法设置；Desktop 不改写输入模块选择。其他输入法需要各自兼容的配置，不应强制覆盖为 IBus。
+
+诊断原生启动崩溃时，结合启动日志和系统 core 报告检查 `printenv XDG_SESSION_TYPE WAYLAND_DISPLAY DISPLAY GDK_BACKEND GTK_IM_MODULE`。可选变量未设置是正常情况。[GTK 环境变量参考](https://docs.gtk.org/gtk3/running.html#environment-variables)定义后端与输入模块选择；不要为此冲突修改全局会话设置，或禁用 Electron 安全配置和 GPU 加速。
 
 开发环境应用菜单提供“刷新页面”（macOS 为 Cmd+R，其他平台为 Ctrl+R）和“重启应用与 Host”。重启会等待 Host 关闭，再重新启动 Electron 和新的 Host；这两项操作都不会重新构建源码。
 
@@ -367,7 +373,7 @@ node apps/desktop/node_modules/pnpm/bin/pnpm.mjs --dir apps/desktop run test:upd
 
 ## 已知限制
 
-- 账号登录尚未接入；登录按钮禁用。Windows 材质效果仍需平台验证。
+- Windows 材质效果仍需平台验证。
 
 - 发布签名、公证、更新托管和跨上一版本的已安装产物验证需要生产发布环境。
 - 依赖的生命周期脚本遵循 pnpm 的构建权限；Desktop 不提供单独的审批对话框。

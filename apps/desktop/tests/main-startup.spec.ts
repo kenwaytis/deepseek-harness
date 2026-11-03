@@ -218,6 +218,7 @@ const harness = await vi.hoisted(async () => {
     menu, popup, socketHeaders: vi.fn(), loginShell, readLoginShell, updateCheck, updateDownload, updateInstall,
     platformDispose,
     platformCloseAndWait,
+    platformCreated: vi.fn<(platform: 'darwin' | 'win32' | null) => void>(),
 
     get analyticsEnabled() { return analyticsEnabled },
     set analyticsEnabled(value: boolean) { analyticsEnabled = value; analyticsEnabledListener?.(value) },
@@ -380,6 +381,9 @@ vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class
 vi.mock('../src/platform-view.ts', async importOriginal => ({
   ...await importOriginal<typeof import('../src/platform-view.ts')>(),
   DesktopPlatformView: class {
+    constructor(_preload: string, _locale: () => string, platform: 'darwin' | 'win32' | null) {
+      harness.platformCreated(platform)
+    }
     notifyLocaleChanged() {}
     setSession() {}
     setBounds() {}
@@ -548,6 +552,14 @@ describe('desktop main startup', () => {
     expect(serveWebDocument).toHaveBeenLastCalledWith(tokens, join('desktop-test-app', 'lib/welcome'))
     expect(forwardWebRequest).not.toHaveBeenCalled()
     expect((await handler(new Request('dsh-app://unknown/update-dialog.html'))).status).toBe(404)
+  })
+
+  it.each([
+    ['darwin', 'darwin'], ['win32', 'win32'], ['linux', null],
+  ] as const)('uses the Host account platform for embedded documents on %s', async (platform, expected) => {
+    vi.stubGlobal('process', { ...process, platform })
+    await readyForUpdate()
+    expect(harness.platformCreated).toHaveBeenCalledExactlyOnceWith(expected)
   })
 
   it.each(([
@@ -1346,6 +1358,51 @@ describe('desktop main startup', () => {
     host.exited.resolve()
     await harness.quitCompleted.promise
     expect(harness.trays[0]!.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('quits on Linux window close and joins Host teardown without creating a tray', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    harness.closeWindowsOnQuit = true
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    window.close()
+    expect(harness.app.quit).toHaveBeenCalledOnce()
+    await host.stopping.promise
+    expect(host.inspectQuit).toHaveBeenCalledOnce()
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+    expect(harness.trays).toHaveLength(0)
+    expect(harness.backgroundNotice.close).not.toHaveBeenCalled()
+    expect(window.isDestroyed()).toBe(false)
+    host.exited.resolve()
+    await harness.quitCompleted.promise
+    expect(window.isDestroyed()).toBe(true)
+  })
+
+  it.each(['en-US', 'zh-CN'])('keeps Linux work running after cancelling window-close confirmation (%s)', async (language) => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    vi.spyOn(harness.app, 'getPreferredSystemLanguages').mockReturnValue([language])
+    const host = await readyWorkspace()
+    const window = harness.windows[0]!
+    host.inspectQuit.mockResolvedValue({ activeTasks: true, scheduledTasks: false })
+    try {
+      harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
+      window.close()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(harness.dialog.showMessageBox).toHaveBeenCalledOnce()
+      const { message, detail, buttons } = harness.dialog.showMessageBox.mock.lastCall![0] as MessageBoxOptions
+      await expect(JSON.stringify({ message, detail, buttons }, null, 2) + '\n')
+        .toMatchFileSnapshot(`./expected/linux-close-${language}.json`)
+      expect(window.hide).not.toHaveBeenCalled()
+      expect(window.isDestroyed()).toBe(false)
+      expect(host.stop).not.toHaveBeenCalled()
+      harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+      window.close()
+      await host.stopping.promise
+      host.exited.resolve()
+      await harness.quitCompleted.promise
+    } finally {
+      host.inspectQuit.mockResolvedValue({ activeTasks: false, scheduledTasks: false })
+    }
   })
 
   it('routes closing through the tray confirmation and keeps the Host running', async () => {
