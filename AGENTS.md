@@ -1,5 +1,27 @@
 # AGENTS.md
 
+## Fork 开发约定（Linux Desktop）
+
+本仓库是 `kenwaytis/deepseek-harness`，Fork 自官方 `deepseek-ai/deepseek-harness`。本 Fork 的目标是在官方尚未支持 Linux Desktop 的情况下开发 Linux 桌面版本。
+
+- `origin` → `kenwaytis/deepseek-harness`：个人 Fork，默认推送目标。
+- `upstream` → `deepseek-ai/deepseek-harness`：官方仓库，用于获取上游更新；不要向其推送 Fork 改动。
+- `master`：保持与官方代码同步且纯净，不在此分支提交 Fork 开发改动。
+- `linux-desktop`：Linux Desktop 开发分支，已推送 GitHub，并跟踪 `origin/linux-desktop`；默认在此分支开展开发。
+- 操作前运行 `git status -sb`，确认实际分支、跟踪关系和工作区状态。
+
+本地 Git 已启用以下配置；它们保存在 `.git/config`，不会随克隆自动继承：
+
+```sh
+git config --local rerere.enabled true       # 记录并复用已解决的合并冲突
+git config --local remote.pushDefault origin # 默认推送到个人 Fork
+git config --local pull.ff only              # 禁止 pull 意外创建合并提交
+```
+
+以下保留上游项目规范，开发时继续遵循。
+
+---
+
 DeepSeek Harness is an all-plugin Cordis agent harness. Read [docs/architecture.md](docs/architecture.md) before changing `packages/`; follow [docs/AGENTS.md](docs/AGENTS.md) for documentation.
 
 ## Pre-stable APIs and released Session data
