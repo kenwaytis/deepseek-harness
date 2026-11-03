@@ -31,7 +31,10 @@ afterEach(() => {
 })
 
 describe('desktop development project', () => {
-  it('includes declared workspace packages missing from the hoist directory in the runtime inventory', () => {
+  it.each([
+    ['mac-arm64', 'darwin', 'arm64'], ['mac-x64', 'darwin', 'x64'],
+    ['win-x64', 'win32', 'x64'], ['linux-x64', 'linux', 'x64'],
+  ] as const)('includes unhoisted workspace packages in the %s runtime inventory', (target, platform, arch) => {
     const root = temporaryRoot()
     const cli = join(root, 'cli')
     const host = join(root, 'host')
@@ -46,10 +49,10 @@ describe('desktop development project', () => {
     writeFileSync(join(host, 'lib/index.js'), '')
     writeFileSync(join(dependency, 'package.json'), JSON.stringify({ name: 'unhoisted', version: '1.2.3' }))
     symlinkSync(dependency, join(cli, 'node_modules/unhoisted'), process.platform === 'win32' ? 'junction' : 'dir')
-    const project = prepareDevelopmentProject({ projectDir: join(root, 'runtime'), cliDir: cli, hostDir: host, dependencyDir: hoisted, release: release(), target: 'mac-arm64' })
+    const project = prepareDevelopmentProject({ projectDir: join(root, 'runtime'), cliDir: cli, hostDir: host, dependencyDir: hoisted, release: release(), target })
     expect(realpathSync(join(project, 'node_modules/unhoisted'))).toBe(realpathSync(dependency))
     const descriptor = JSON.parse(readFileSync(join(project, 'desktop-runtime.json'), 'utf8')) as { platform: string; arch: string; sharedPackages: unknown[] }
-    expect(descriptor).toMatchObject({ platform: 'darwin', arch: 'arm64' })
+    expect(descriptor).toMatchObject({ platform, arch })
     expect(descriptor.sharedPackages).toContainEqual({ name: 'unhoisted', version: '1.2.3', path: 'node_modules/unhoisted' })
   })
 

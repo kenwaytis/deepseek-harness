@@ -185,6 +185,8 @@ macOS and Linux GUI launches inherit only the session manager's environment, wit
 
 ## Develop
 
+Linux x64 supports unpackaged development with the existing Desktop Host, Web UI and Desktop profile. The launcher prepares the locked Linux Primary Runtime, including Python libraries, standalone Node.js and pnpm, under `.desktop-build/targets/linux-x64/runtime`. Linux development runs the Host and package operations with that standalone Node.js and records its version in the disposable project; macOS and Windows use Electron Node mode. This avoids [Linux Electron's GLib symbol conflicts with sharp/libvips](https://sharp.pixelplumbing.com/install/#electron-and-linux) without disabling image processing. The GUI retains Electron's sandbox. Linux development does not enable official packaging, publication or automatic updates; release targets remain macOS and Windows.
+
 The development application menu offers Reload Page (Cmd+R on macOS, Ctrl+R elsewhere) and Restart App and Host. Restart waits for Host shutdown before relaunching Electron and starting a new Host; neither action rebuilds source files.
 
 `dev:desktop` builds the current Host, client bundles, Web frontend, and Electron shell, projects the built CLI and private Desktop Host packages with their workspace dependencies into a disposable desktop npm project, and launches Electron without resolving dsh from npm:

@@ -203,7 +203,10 @@ interface RuntimeResources {
 
 function runtimeResources(): RuntimeResources {
   const development = !app.isPackaged
-  const node = process.execPath
+  // Linux Electron's global GLib symbols can conflict with libvips used by sharp.
+  const node = development && process.platform === 'linux'
+    ? join(developmentPrimaryRuntime(), 'dependencies', 'node', 'bin', 'node')
+    : process.execPath
   const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(process.resourcesPath, 'runtime', 'bin')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? (development ? join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.mjs')

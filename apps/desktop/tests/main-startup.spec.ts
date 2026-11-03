@@ -2571,7 +2571,8 @@ describe('desktop main startup', () => {
     expect(window.urls).toEqual(['dsh-app://app/'])
   })
 
-  it('prepares an independent plugin profile for the unpackaged Host', async () => {
+  it.each(['win32', 'darwin', 'linux'] as const)('prepares an independent plugin profile for the unpackaged %s Host', async (platform) => {
+    vi.stubGlobal('process', { ...process, platform })
     harness.app.isPackaged = false
     vi.stubEnv('DSH_DESKTOP_DSH_DIR', undefined)
     await import('../src/main.ts')
@@ -2579,8 +2580,10 @@ describe('desktop main startup', () => {
     harness.prepared.resolve()
     await harness.hostStarted.promise
     const project = join(harness.app.getAppPath(), '.desktop-build', 'development', 'project')
-    expect(harness.hosts[0]).toMatchObject({ node: process.execPath, runtime: project,
-      primaryRuntime: 'test-primary-runtime', profile: 'desktop-test-profile' })
+    expect(harness.hosts[0]).toMatchObject({
+      node: platform === 'linux' ? join('test-primary-runtime', 'dependencies', 'node', 'bin', 'node') : process.execPath,
+      runtime: project, primaryRuntime: 'test-primary-runtime', profile: 'desktop-test-profile',
+    })
     expect(harness.applyRelease).toHaveBeenCalledOnce()
     harness.hosts[0]!.ready.resolve()
     await harness.navigated.promise

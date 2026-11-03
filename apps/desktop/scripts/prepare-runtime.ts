@@ -17,7 +17,7 @@ import { prepareCommandLink } from './prepare-command-link.ts'
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const RUNTIME_ROOT = BUILD_PATHS.runtime
 
-type DesktopTarget = ReturnType<typeof desktopTargetPlatform>
+type DesktopTarget = Exclude<ReturnType<typeof desktopTargetPlatform>, { platform: 'linux' }>
 
 /** Extract the target Electron distribution and return its embedded Node version. */
 async function prepareElectron({ platform, arch }: DesktopTarget): Promise<string> {
@@ -51,6 +51,7 @@ function prepareCli({ platform, arch }: DesktopTarget): void {
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: { 'defer-primary-runtime-smoke': { type: 'boolean', default: false } } })
   const target = desktopTargetPlatform(resolveDesktopBuildTarget())
+  if (target.platform === 'linux') throw new Error('desktop runtime: Linux supports development primary-runtime preparation only, not release packaging')
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
   const preparePrimary = () => packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',

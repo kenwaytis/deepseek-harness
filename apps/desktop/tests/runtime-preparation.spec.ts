@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
   root: '',
-  target: 'mac-arm64' as 'mac-arm64' | 'mac-x64' | 'win-x64',
+  target: 'mac-arm64' as import('../scripts/desktop-build-paths.mjs').DesktopBuildTarget,
   pnpm: '11.7.0' as string | undefined,
   failure: undefined as 'electron' | 'primary' | 'cli' | undefined,
   preparePrimary: vi.fn(),
@@ -74,6 +74,17 @@ afterEach(async () => {
   process.argv = originalArgv
   vi.unstubAllEnvs()
   await rm(state.root, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
+})
+
+it('rejects Linux release preparation without replacing its development runtime', async () => {
+  state.target = 'linux-x64'
+  const runtime = join(state.root, 'runtime')
+  mkdirSync(runtime)
+  writeFileSync(join(runtime, 'development-marker'), 'retained')
+  await expect(import('../scripts/prepare-runtime.ts')).rejects.toThrow('Linux supports development primary-runtime preparation only')
+  expect(readFileSync(join(runtime, 'development-marker'), 'utf8')).toBe('retained')
+  expect(state.preparePrimary).not.toHaveBeenCalled()
+  expect(state.extractElectron).not.toHaveBeenCalled()
 })
 
 it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('prepares %s with one pnpm distribution and its CLI resources', async (target) => {

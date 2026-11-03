@@ -112,9 +112,10 @@ const targetManifests = () => new Map<string, PackedDesktopPackage>([
 ])
 
 it.each([
-  ['darwin', 'arm64', true], ['darwin', 'x64', true], ['win32', 'x64', false],
-] as const)('selects the CUA native tarball for target %s/%s independently of the host', (platform, arch, included) => {
-  const selected = selectDesktopPackageClosure(targetManifests(), { platform, arch }).map(entry => entry.manifest.name)
+  [{ platform: 'darwin', arch: 'arm64' }, true], [{ platform: 'darwin', arch: 'x64' }, true],
+  [{ platform: 'win32', arch: 'x64' }, false],
+] as const)('selects the CUA native tarball for target %j independently of the host', (target, included) => {
+  const selected = selectDesktopPackageClosure(targetManifests(), target).map(entry => entry.manifest.name)
   expect(selected.includes(macProvider)).toBe(included)
   expect(selected).toContain('@deepseek-ai/dsh-cua')
   expect(selected).toContain(cuaBundle)

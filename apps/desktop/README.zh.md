@@ -185,6 +185,8 @@ macOS 和 Linux 从图形界面启动的程序只继承会话管理器提供的�
 
 ## 开发
 
+Linux x64 支持使用现有 Desktop Host、Web UI 和 Desktop Profile 进行未打包开发。启动器在 `.desktop-build/targets/linux-x64/runtime` 下准备锁定的 Linux Primary Runtime，包含 Python 库、独立 Node.js 和 pnpm。Linux 开发使用其中的独立 Node.js 运行 Host 和包操作，并将其版本写入一次性项目；macOS 和 Windows 使用 Electron Node 模式。这可以避开 [Linux Electron 与 sharp/libvips 的 GLib 符号冲突](https://sharp.pixelplumbing.com/install/#electron-and-linux)，而不禁用图片处理。GUI 保留 Electron 沙箱。Linux 开发不启用官方打包、发布或自动更新；发行目标仍为 macOS 和 Windows。
+
 开发环境应用菜单提供“刷新页面”（macOS 为 Cmd+R，其他平台为 Ctrl+R）和“重启应用与 Host”。重启会等待 Host 关闭，再重新启动 Electron 和新的 Host；这两项操作都不会重新构建源码。
 
 `dev:desktop` 会构建当前 Host、客户端 bundle、Web 前端和 Electron 壳，把已构建的 CLI 包、私有 Desktop Host 包及其 workspace 依赖投影为一次性桌面 npm 项目，然后直接启动 Electron；这条路径不从 npm 解析 dsh：

@@ -102,13 +102,17 @@ async function main(): Promise<void> {
   ]) {
     if (!existsSync(path)) throw new Error(`desktop development: missing built artifact ${path}`)
   }
+  await preparePrimaryRuntime()
+  const node = process.platform === 'linux'
+    ? join(process.env.DSH_DESKTOP_PRIMARY_RUNTIME_DIR ?? developmentRuntimeDirectory(), 'dependencies', 'node', 'bin', 'node')
+    : createRequire(import.meta.url)('electron') as string
   const version = packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')
   const pnpmVersion = packageVersion(join(APP_ROOT, 'node_modules', 'pnpm', 'package.json'), 'pnpm package')
   const release: DesktopRelease = {
     schemaVersion: 1,
     version,
     hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
-    nodeVersion: execFileSync(createRequire(import.meta.url)('electron') as string, ['-p', 'process.versions.node'],
+    nodeVersion: execFileSync(node, ['-p', 'process.versions.node'],
       { encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } }).trim(),
     pnpmVersion,
   }
@@ -120,7 +124,6 @@ async function main(): Promise<void> {
     release,
     target: resolveDesktopBuildTarget(),
   })
-  await preparePrimaryRuntime()
   await launchElectron()
 }
 
