@@ -1,7 +1,8 @@
 /**
  * Enforce `wc -w`-style ceilings from `scripts/doc-budgets.manifest.json`.
  * Missing files and invalid ceilings fail; `--list` reports current usage.
- * Only listed standing docs are budgeted. Ceilings ratchet down with at least
+ * A null ceiling requires the file to exist without limiting its word count.
+ * Only listed standing docs are checked. Ceilings ratchet down with at least
  * 5% headroom; raising one requires the justification defined in
  * `docs/AGENTS.md`.
  */
@@ -18,14 +19,14 @@ function countWords(text: string): number {
   return text.split(/\s+/).filter(Boolean).length
 }
 
-const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as Record<string, number>
+const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as Record<string, number | null>
 
 const listOnly = process.argv.includes('--list')
 const failures: string[] = []
 const rows: string[] = []
 
 for (const [path, ceiling] of Object.entries(manifest)) {
-  if (!Number.isInteger(ceiling) || ceiling <= 0) {
+  if (ceiling !== null && (!Number.isInteger(ceiling) || ceiling <= 0)) {
     rows.push(`BAD   ${'—'.padStart(6)} / ${String(ceiling).padEnd(6)} ${path}`)
     failures.push(`${path}: ceiling must be a positive integer, got ${ceiling}`)
     continue
@@ -34,6 +35,10 @@ for (const [path, ceiling] of Object.entries(manifest)) {
   if (!existsSync(abs)) {
     rows.push(`MISS  ${'—'.padStart(6)} / ${String(ceiling).padEnd(6)} ${path}`)
     failures.push(`${path}: budgeted file does not exist (renamed or deleted? update scripts/doc-budgets.manifest.json in the same change)`)
+    continue
+  }
+  if (ceiling === null) {
+    rows.push(`ok    ${'—'.padStart(6)} / ${'none'.padEnd(6)} ${path}`)
     continue
   }
   const words = countWords(readFileSync(abs, 'utf8'))
@@ -55,4 +60,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log(`verify-doc-budgets: ${Object.keys(manifest).length} budgeted docs within ceiling.`)
+console.log(`verify-doc-budgets: ${Object.keys(manifest).length} docs checked; all configured ceilings satisfied.`)
