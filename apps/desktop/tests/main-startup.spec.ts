@@ -2647,6 +2647,25 @@ describe('desktop main startup', () => {
     expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
   })
 
+  it('boots a packaged Linux Host from physical resources without development overrides or an update policy', async () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', '/ignored/development/runtime')
+    vi.stubEnv('DSH_DESKTOP_DSH_DIR', '/ignored/development/project')
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    expect(harness.hosts[0]).toMatchObject({
+      node: join('desktop-test-resources', 'runtime', 'primary-runtime', 'dependencies', 'node', 'bin', 'node'),
+      runtime: join('desktop-test-resources', 'app.asar.unpacked', 'dsh'),
+      primaryRuntime: join('desktop-test-resources', 'runtime', 'primary-runtime'), profile: 'desktop-test-profile',
+    })
+    harness.hosts[0]!.ready.resolve()
+    await harness.navigated.promise
+    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
+    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+  })
+
   it('fails an unpackaged launch that receives no primary runtime directory', async () => {
     harness.app.isPackaged = false
     vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', undefined)

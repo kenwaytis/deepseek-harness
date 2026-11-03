@@ -8,7 +8,7 @@ import { dirname, join, relative } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
 import { prepareDesktopCli } from '../scripts/prepare-cli.ts'
 
-function fixture() {
+function fixture(platform: 'darwin' | 'win32' | 'linux' = process.platform === 'win32' ? 'win32' : 'darwin') {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-cli-launcher-')))
   const children: ChildProcessWithoutNullStreams[] = []
   const exits: Promise<unknown>[] = []
@@ -20,15 +20,15 @@ function fixture() {
     await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   })
   const application = join(root, 'Application 中文 with spaces.app')
-  const platform = process.platform === 'win32' ? 'win32' : 'darwin'
   const resources = join(application, ...platform === 'darwin' ? ['Contents', 'Resources'] : ['resources'])
   const cli = join(resources, 'runtime', 'cli')
   prepareDesktopCli(cli, platform)
-  const electron = join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
+  const electron = platform === 'linux' ? join(resources, 'runtime', 'primary-runtime', 'dependencies', 'node', 'bin', 'node')
+    : join(application, ...platform === 'darwin' ? ['Contents', 'MacOS', 'DeepSeek Harness'] : ['DeepSeek Harness.exe'])
   mkdirSync(dirname(electron), { recursive: true })
   if (platform === 'win32') copyFileSync(process.execPath, electron)
   else symlinkSync(process.execPath, electron)
-  const entry = join(resources, 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
+  const entry = join(resources, platform === 'linux' ? 'app.asar.unpacked' : 'app.asar', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'cli.js')
   mkdirSync(dirname(entry), { recursive: true })
   writeFileSync(join(dirname(entry), 'package.json'), '{"type":"module"}\n')
   writeFileSync(entry, [
@@ -71,6 +71,17 @@ it('preserves common arguments, cwd, environment, binary input, stderr and exit 
   expect(await run.closed, run.stderr()).toBe(23)
   expect(JSON.parse(run.stdout())).toEqual({ args, cwd: f.root, value: 'kept', nodeMode: '1', input: input.toString('hex') })
   expect(run.stderr()).toBe('separate stderr\n')
+})
+
+it.skipIf(process.platform === 'win32')('runs the physical Linux CLI with bundled Node from a symlink outside the application', async () => {
+  const f = fixture('linux')
+  const command = join(f.root, 'dsh')
+  symlinkSync(relative(f.root, f.command), command)
+  const args = ['plugin', '--profile', 'desktop', '中文 file', '$HOME']
+  const run = f.start(args, command)
+  run.child.stdin.end('linux')
+  expect(await run.closed, run.stderr()).toBe(23)
+  expect(JSON.parse(run.stdout())).toMatchObject({ args, cwd: f.root, input: Buffer.from('linux').toString('hex') })
 })
 
 it.skipIf(process.platform === 'win32')('resolves chained command symlinks without expanding argument contents', async () => {

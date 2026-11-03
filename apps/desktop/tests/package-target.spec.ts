@@ -21,12 +21,24 @@ describe('desktop package target', () => {
     })
   })
 
+  it('selects a local unsigned Linux target without enabling update distribution', () => {
+    const invocation = parseDesktopPackageInvocation(['linux-x64'], 'linux', 'x64')
+    expect(invocation).toMatchObject({ unsigned: true, target: { platform: 'linux', arch: 'x64' } })
+    expect(parseDesktopPackageInvocation([], 'linux', 'x64').target.name).toBe('linux-x64')
+    expect(desktopElectronBuilderArguments(invocation.target, true)).toEqual([
+      'exec', 'electron-builder', '--config', 'electron-builder.config.mjs', '--linux', '--x64', '--publish', 'never', '--dir',
+    ])
+    expect(() => parseDesktopPackageInvocation(['linux-x64', '--skip-notarization'], 'linux', 'x64')).toThrow(/signed macOS/u)
+  })
+
   it('allows an Apple Silicon host to build the Intel target through Rosetta', () => {
     expect(resolveDesktopPackageTarget('mac-x64', 'darwin', 'arm64').arch).toBe('x64')
   })
 
   it('rejects unsupported targets and hosts before building', () => {
-    expect(() => resolveDesktopPackageTarget('linux-x64', 'linux', 'x64')).toThrow(/unsupported target/u)
+    expect(() => resolveDesktopPackageTarget('linux-arm64', 'linux', 'arm64')).toThrow(/unsupported target/u)
+    expect(() => resolveDesktopPackageTarget('linux-x64', 'darwin', 'x64')).toThrow(/Linux x64/u)
+    expect(() => resolveDesktopPackageTarget('linux-x64', 'linux', 'arm64')).toThrow(/Linux x64/u)
     expect(() => resolveDesktopPackageTarget('win-x64', 'darwin', 'arm64')).toThrow(/Windows x64/u)
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'darwin', 'x64')).toThrow(/Apple Silicon/u)
     expect(() => resolveDesktopPackageTarget('mac-arm64', 'linux', 'arm64')).toThrow(/macOS/u)

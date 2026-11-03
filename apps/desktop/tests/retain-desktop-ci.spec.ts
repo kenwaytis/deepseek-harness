@@ -9,9 +9,9 @@ import { prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 
-it('rejects Linux development builds before reading publication configuration', async () => {
+it('rejects Linux local builds before reading publication configuration', async () => {
   await expect(retainDesktopCi({ DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: 'x64' }))
-    .rejects.toThrow('Linux development builds cannot be published')
+    .rejects.toThrow('Linux local builds cannot be published')
 })
 
 it.each([

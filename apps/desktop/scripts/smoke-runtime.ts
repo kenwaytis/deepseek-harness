@@ -15,7 +15,7 @@ import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 /**
  * Check CLI package operations, Host startup, its frontend, external plugins and real Office-to-PDF conversion.
  * @param root - Materialized dsh resources.
- * @param node - Prepared target Electron executable.
+ * @param node - Prepared Host executable: standalone Node on Linux, Electron Node mode elsewhere.
  * @param runtime - Verified resource descriptor.
  * @param environment - Credential-scrubbed build environment and private native cache.
  * @param resourcesRuntime - Bundled interpreters outside the application archive.

@@ -16,6 +16,9 @@ export interface DesktopElectronBuilderConfig {
   ]
   readonly extraMetadata: { readonly dshDesktopAppId: string }
   readonly asarUnpack: readonly string[]
+  readonly extraFiles: readonly { readonly from: string; readonly to: 'AppRun' }[]
+  readonly appImage: { readonly executableArgs: readonly string[] }
+  readonly linux: { readonly executableName: string; readonly category: string; readonly target: readonly ['AppImage'] }
   readonly extraResources: readonly [
     { readonly from: string, readonly to: 'runtime' },
     { readonly from: string, readonly to: 'icon.png' },

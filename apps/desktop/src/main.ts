@@ -204,15 +204,16 @@ interface RuntimeResources {
 function runtimeResources(): RuntimeResources {
   const development = !app.isPackaged
   // Linux Electron's global GLib symbols can conflict with libvips used by sharp.
-  const node = development && process.platform === 'linux'
-    ? join(developmentPrimaryRuntime(), 'dependencies', 'node', 'bin', 'node')
+  const node = process.platform === 'linux'
+    ? join(development ? developmentPrimaryRuntime() : join(process.resourcesPath, 'runtime', 'primary-runtime'), 'dependencies', 'node', 'bin', 'node')
     : process.execPath
   const nodeBin = development ? join(app.getAppPath(), 'scripts', 'node-bin') : join(process.resourcesPath, 'runtime', 'bin')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? (development ? join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.mjs')
       : join(process.resourcesPath, 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'))
   const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
-    ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project') : join(app.getAppPath(), 'dsh'))
+    ?? (development ? join(app.getAppPath(), '.desktop-build', 'development', 'project')
+      : process.platform === 'linux' ? join(process.resourcesPath, 'app.asar.unpacked', 'dsh') : join(app.getAppPath(), 'dsh'))
   return { node, nodeBin, pnpm, dsh }
 }
 
@@ -1403,7 +1404,7 @@ async function main(): Promise<void> {
   const policyInput: unknown = app.isPackaged
     ? ('dshMandatoryUpdatePolicy' in manifest ? manifest.dshMandatoryUpdatePolicy : undefined)
     : developmentPolicy === undefined ? undefined : JSON.parse(developmentPolicy) as unknown
-  const policyConfig = resolveDesktopPolicyConfig(policyInput, !app.isPackaged)
+  const policyConfig = resolveDesktopPolicyConfig(policyInput, !app.isPackaged || process.platform === 'linux')
   if (policyConfig !== undefined) {
     if (policyConfig.authentication === 'feishu-test') {
       policyAuth = new DesktopPolicyTestAuth(policyConfig.origin, policyConfig.allowedAuthOrigins, locale,

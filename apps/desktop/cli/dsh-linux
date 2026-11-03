@@ -1,0 +1,14 @@
+#!/bin/sh
+# Use the bundled Node and physical Host files without changing the working directory.
+set -e
+launcher=$0
+while [ -L "$launcher" ]; do
+  directory=$(CDPATH= cd -- "$(dirname -- "$launcher")" && pwd -P)
+  target=$(readlink "$launcher")
+  case "$target" in
+    /*) launcher=$target ;;
+    *) launcher=$directory/$target ;;
+  esac
+done
+resources=$(CDPATH= cd -- "$(dirname -- "$launcher")/../../.." && pwd -P)
+exec "$resources/runtime/primary-runtime/dependencies/node/bin/node" --expose-internals "$resources/app.asar.unpacked/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js" "$@"

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Keep Electron's sandbox enabled; missing user namespaces are a startup error.
+set -eu
+appdir=${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)}
+exec "$appdir/deepseek-harness" "$@"

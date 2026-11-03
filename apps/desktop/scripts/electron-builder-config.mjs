@@ -66,7 +66,9 @@ export function createElectronBuilderConfig(
   if (skipNotarization && (unsigned || resolvedPlatform !== 'darwin')) throw new Error('Skipping notarization requires a signed macOS build')
   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
   const packagesWindows = resolvedPlatform === 'win32'
-  const policy = packagesMacOS && unsigned ? undefined : resolveDesktopPolicyEnvironment(env)
+  const packagesLinux = resolvedPlatform === 'linux'
+  if (packagesLinux && !unsigned) throw new Error('desktop package: Linux supports local unsigned artifacts only')
+  const policy = packagesLinux || (packagesMacOS && unsigned) ? undefined : resolveDesktopPolicyEnvironment(env)
   if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
   const macOSSigning = packagesMacOS && !unsigned ? resolveMacOSSigningEnvironment(env) : undefined
   if (packagesMacOS && !unsigned && !skipNotarization) resolveMacOSNotarizationEnvironment(env)
@@ -75,7 +77,8 @@ export function createElectronBuilderConfig(
   let primaryRuntimeDestination
   let dshDestination
   let windowsCode = []
-  const unpack = ['**/*.{node,dylib,dll,so,exe}', '**/*.so.*', '**/spawn-helper', '**/@vscode/ripgrep-*/bin/rg',
+  // Standalone Linux Node cannot read ASAR; its complete Host graph must be physical files.
+  const unpack = [...(packagesLinux ? ['**/dsh/**/*'] : []), '**/*.{node,dylib,dll,so,exe}', '**/*.so.*', '**/spawn-helper', '**/@vscode/ripgrep-*/bin/rg',
     `**/node_modules/@deepseek-ai/libreoffice-kit-${resolvedPlatform}-${resolvedArch}/**/*`]
   const windowsSigner = packagesWindows && !unsigned
     ? createWindowsTokenSigner({
@@ -155,6 +158,9 @@ export function createElectronBuilderConfig(
       { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
     ],
     asarUnpack: unpack,
+    // The AppImage builder copies appOutDir over its generated AppRun, whose sandbox fallback is unsafe.
+    extraFiles: packagesLinux ? [{ from: fileURLToPath(new URL('../resources/AppRun', import.meta.url)), to: 'AppRun' }] : [],
+    appImage: { executableArgs: [] },
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
       { from: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)), to: 'icon.png' },
@@ -253,6 +259,8 @@ export function createElectronBuilderConfig(
       target: ['nsis'],
     },
     linux: {
+      executableName: 'deepseek-harness',
+      icon: fileURLToPath(new URL('../resources/icon-windows.png', import.meta.url)),
       category: 'Development',
       target: ['AppImage'],
     },

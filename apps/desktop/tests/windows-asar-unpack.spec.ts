@@ -125,6 +125,28 @@ async function packageFixture(input: Awaited<ReturnType<typeof fixture>>) {
   }).pack([{ src: mapping.from, destination: join(destination, 'dsh'), files, metadata }])
 }
 
+it('unpacks the entire Linux Host graph for standalone Node while sealing every file', async () => {
+  const input = await fixture(true)
+  const config = createElectronBuilderConfig({ DSH_DESKTOP_APP_ID: 'com.deepseek.harness', DSH_DESKTOP_UNSIGNED: '1' },
+    'linux', 'x64', input.source)
+  input.config.asarUnpack = [...config.asarUnpack]
+  const expected = await seal(input)
+  await packageFixture(input)
+  await verifyRuntimeArchive(join(input.resources, 'app.asar'), expected)
+  const archive = await readAsar(join(input.resources, 'app.asar'))
+  const file = 'dsh/node_modules/foo/companion.json'
+  expect(archive.getFile(file).unpacked).toBe(true)
+  expect(await readFile(join(input.resources, 'app.asar.unpacked', file), 'utf8')).toBe('{}')
+  expect(config.publish).toBeNull()
+  expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
+  expect(config.appImage.executableArgs).toEqual([])
+  expect(config.extraFiles).toHaveLength(1)
+  expect(config.extraFiles[0]!.from).toMatch(/resources[\\/]AppRun$/u)
+  expect(config.extraFiles[0]!.to).toBe('AppRun')
+  await writeFile(join(input.resources, 'app.asar.unpacked', file), 'changed')
+  await expect(verifyRuntimeArchive(join(input.resources, 'app.asar'), expected)).rejects.toThrow('ASAR integrity')
+})
+
 it('includes the diagnostic worker in the archive selected by the shipping file rules', async () => {
   const root = await mkdtemp(join(tmpdir(), 'diagnostic-worker-asar-'))
   roots.push(root)

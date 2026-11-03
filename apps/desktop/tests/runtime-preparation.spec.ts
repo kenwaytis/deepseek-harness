@@ -26,7 +26,8 @@ vi.mock('@electron/get', () => ({ downloadArtifact: async () => 'electron.zip' }
 vi.mock('extract-zip', () => ({ default: state.extractElectron }))
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
-  execFileSync: (file: string) => file === '/usr/libexec/PlistBuddy' ? '12.0\n' : '24.18.1\n',
+  execFileSync: (file: string) => file === '/usr/libexec/PlistBuddy' ? '12.0\n'
+    : file.endsWith(join('primary-runtime', 'dependencies', 'node', 'bin', 'node')) ? '24.17.0\n' : '24.18.1\n',
 }))
 vi.mock('../scripts/prepare-command-link.ts', () => ({ prepareCommandLink: state.commandLink }))
 // The compiled command manager is a build input; all source resource copies use real files.
@@ -63,7 +64,7 @@ beforeEach(() => {
     mkdirSync(pnpm, { recursive: true })
     writeFileSync(join(pnpm, 'pnpm.mjs'), '')
     writeFileSync(join(root, 'runtime.json'), JSON.stringify({
-      desktopVersion: '1.0.0', platform: state.target === 'win-x64' ? 'win32' : 'darwin',
+      desktopVersion: '1.0.0', platform: state.target === 'win-x64' ? 'win32' : state.target === 'linux-x64' ? 'linux' : 'darwin',
       arch: state.target === 'mac-arm64' ? 'arm64' : 'x64',
       python: '3.12.14', node: '24.17.0', pnpm: state.pnpm, pythonPackages: { numpy: '2.3.5' },
     }))
@@ -76,18 +77,7 @@ afterEach(async () => {
   await rm(state.root, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 })
 })
 
-it('rejects Linux release preparation without replacing its development runtime', async () => {
-  state.target = 'linux-x64'
-  const runtime = join(state.root, 'runtime')
-  mkdirSync(runtime)
-  writeFileSync(join(runtime, 'development-marker'), 'retained')
-  await expect(import('../scripts/prepare-runtime.ts')).rejects.toThrow('Linux supports development primary-runtime preparation only')
-  expect(readFileSync(join(runtime, 'development-marker'), 'utf8')).toBe('retained')
-  expect(state.preparePrimary).not.toHaveBeenCalled()
-  expect(state.extractElectron).not.toHaveBeenCalled()
-})
-
-it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('prepares %s with one pnpm distribution and its CLI resources', async (target) => {
+it.each(['mac-arm64', 'mac-x64', 'win-x64', 'linux-x64'] as const)('prepares %s with one pnpm distribution and its CLI resources', async (target) => {
   state.target = target
   const windows = target === 'win-x64'
   if (windows) process.argv.push('--defer-primary-runtime-smoke')
@@ -101,10 +91,10 @@ it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('prepares %s with one pnpm
   expect(readFileSync(join(runtime, 'cli', 'command-manager.js'), 'utf8')).toBe('command manager fixture')
   expect(existsSync(join(runtime, 'cli', 'command-path.ps1'))).toBe(true)
   expect(JSON.parse(readFileSync(join(runtime, 'versions.json'), 'utf8'))).toEqual({
-    schemaVersion: 1, node: '24.18.1', pnpm: '11.7.0',
+    schemaVersion: 1, node: target === 'linux-x64' ? '24.17.0' : '24.18.1', pnpm: '11.7.0',
   })
   expect(state.preparePrimary).toHaveBeenCalledWith({ deferSmoke: windows })
-  if (windows) expect(state.commandLink).not.toHaveBeenCalled()
+  if (windows || target === 'linux-x64') expect(state.commandLink).not.toHaveBeenCalled()
   else expect(state.commandLink).toHaveBeenCalledWith(join(runtime, 'cli'), target === 'mac-arm64' ? 'arm64' : 'x64', '12.0')
 })
 

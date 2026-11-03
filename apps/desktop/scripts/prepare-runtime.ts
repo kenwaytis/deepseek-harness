@@ -17,7 +17,7 @@ import { prepareCommandLink } from './prepare-command-link.ts'
 const BUILD_PATHS = resolveDesktopTargetBuildPaths()
 const RUNTIME_ROOT = BUILD_PATHS.runtime
 
-type DesktopTarget = Exclude<ReturnType<typeof desktopTargetPlatform>, { platform: 'linux' }>
+type DesktopTarget = ReturnType<typeof desktopTargetPlatform>
 
 /** Extract the target Electron distribution and return its embedded Node version. */
 async function prepareElectron({ platform, arch }: DesktopTarget): Promise<string> {
@@ -27,7 +27,7 @@ async function prepareElectron({ platform, arch }: DesktopTarget): Promise<strin
     () => downloadArtifact({ version, platform, arch, artifactName: 'electron', cacheRoot: BUILD_PATHS.downloads }))
   rmSync(BUILD_PATHS.electron, { recursive: true, force: true })
   await packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'extract:electron', () => extractZip(archive, { dir: BUILD_PATHS.electron }))
-  const executable = join(BUILD_PATHS.electron, platform === 'win32' ? 'electron.exe' : 'Electron.app/Contents/MacOS/Electron')
+  const executable = join(BUILD_PATHS.electron, platform === 'win32' ? 'electron.exe' : platform === 'linux' ? 'electron' : 'Electron.app/Contents/MacOS/Electron')
   return execFileSync(executable, ['-p', 'process.versions.node'], {
     encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
   }).trim()
@@ -51,7 +51,6 @@ function prepareCli({ platform, arch }: DesktopTarget): void {
 async function main(): Promise<void> {
   const { values } = parseArgs({ options: { 'defer-primary-runtime-smoke': { type: 'boolean', default: false } } })
   const target = desktopTargetPlatform(resolveDesktopBuildTarget())
-  if (target.platform === 'linux') throw new Error('desktop runtime: Linux supports development primary-runtime preparation only, not release packaging')
   rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   mkdirSync(RUNTIME_ROOT, { recursive: true })
   const preparePrimary = () => packagingStep(process.env.DSH_DESKTOP_PACKAGING_RUN_DIR, 'prepare:primary-runtime',
@@ -65,6 +64,10 @@ async function main(): Promise<void> {
   } else {
     nodeVersion = await prepareElectron(target)
     await preparePrimary()
+  }
+  if (target.platform === 'linux') {
+    nodeVersion = execFileSync(join(RUNTIME_ROOT, 'primary-runtime', 'dependencies', 'node', 'bin', 'node'),
+      ['-p', 'process.versions.node'], { encoding: 'utf8' }).trim()
   }
   const { pnpm } = await readPrimaryRuntime(join(RUNTIME_ROOT, 'primary-runtime'))
   if (pnpm === undefined) throw new Error('desktop runtime: primary-runtime manifest has no pnpm version')

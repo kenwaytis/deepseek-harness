@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write apps/desktop/packaging/linux/README.md
+/:
+  en: 591408959b25bc5a
+  zh: b4835f85c02c6c5b
+/linux-appimage:
+  en: d163c467358984ab
+  zh: a2fa0c9566eb711c
+/linux-appimage/summary:
+  en: cba5865d6c68dc03
+  zh: 265142346ce24fb5
+/linux-appimage/table-of-contents:
+  en: 0dcfa65b89c1ff73
+  zh: 3fd3fb8f6f49f1f3
+/linux-appimage/run:
+  en: 329a11e2a40c5e74
+  zh: d8b6a7162feca411
+/linux-appimage/system-requirements:
+  en: 67841f63b60746a1
+  zh: c33416b7544d04db
+/linux-appimage/nixos:
+  en: f6896aab9958509f
+  zh: 4a76bf88c7456693
+/linux-appimage/user-data-and-manual-upgrades:
+  en: 4de1e07156b61227
+  zh: 844245a73b734f9f
+/linux-appimage/build-from-source:
+  en: 4cbdec7f87d42e43
+  zh: 35cc65082deb1659
+/linux-appimage/runtime-layout-and-verification:
+  en: c616f9aed97865ff
+  zh: 487af3b959379f33

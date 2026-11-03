@@ -148,6 +148,29 @@ it.each([undefined, '2'])('uses bounded Windows packing while retaining signing 
   expect(stages.at(-1)).toBe('exec tsx scripts/smoke-packaged-runtime.ts')
 })
 
+it.each([false, true])('verifies the Linux directory before creating AppImage (directory=%s)', async (directory) => {
+  const { run, stages } = supervisor()
+  await packageTarget(parseDesktopPackageInvocation(['linux-x64', ...(directory ? ['--dir'] : [])], 'linux', 'x64'), {}, run)
+  const builder = 'exec electron-builder --config electron-builder.config.mjs --linux'
+  const assemble = stages.findIndex(stage => stage.startsWith(builder))
+  expect(stages[0]).toBe('run build --profile local')
+  expect(stages[assemble]).toBe(`${builder} --x64 --publish never --dir`)
+  expect(stages[assemble + 1]).toBe('exec tsx scripts/smoke-packaged-runtime.ts --unsigned')
+  expect(stages.slice(assemble + 2)).toHaveLength(directory ? 0 : 1)
+  if (!directory) expect(stages[assemble + 2]).toMatch(/--linux AppImage --x64 --publish never --prepackaged .*linux-unpacked/u)
+  expect(writeFileSync).not.toHaveBeenCalled()
+  expect(withWindowsSigningStage).not.toHaveBeenCalled()
+  expect(withMacOSNotarizationProxy).not.toHaveBeenCalled()
+})
+
+it('does not create AppImage when the Linux directory smoke fails', async () => {
+  const { run, stages } = supervisor('exec tsx scripts/smoke-packaged-runtime.ts --unsigned')
+  await expect(packageTarget(parseDesktopPackageInvocation(['linux-x64'], 'linux', 'x64'), {}, run)).rejects.toThrow('stage refused')
+  expect(stages.at(-1)).toBe('exec tsx scripts/smoke-packaged-runtime.ts --unsigned')
+  expect(stages.some(stage => stage.includes('--linux AppImage'))).toBe(false)
+  expect(writeFileSync).not.toHaveBeenCalled()
+})
+
 it('requires one signing preflight before building, then records only the complete release', async () => {
   const { run, stages } = supervisor()
   await packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), environment, run)

@@ -5,7 +5,7 @@ interface DesktopTargetPlatforms {
   readonly 'linux-x64': { readonly platform: 'linux'; readonly arch: 'x64' }
 }
 
-/** Desktop preparation targets; Linux supports development, not official update distribution. */
+/** Desktop preparation targets; Linux supports local AppImage packaging, not official update distribution. */
 export type DesktopBuildTarget = keyof DesktopTargetPlatforms
 
 /** Mutable target directories plus shared download and package caches. */

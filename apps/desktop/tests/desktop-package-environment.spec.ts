@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { loadDesktopPackageEnvironment, localMacOSPackageEnvironment, validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
+import { loadDesktopPackageEnvironment, localDesktopPackageEnvironment, validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
 import { resolveWindowsPackageSettings } from '../scripts/windows-package-settings.mjs'
 
 const WINDOWS = { platform: 'win32', arch: 'x64' } as const
@@ -23,6 +23,17 @@ async function withDirectory(action: (directory: string) => Promise<void>): Prom
 }
 
 describe('Desktop local packaging configuration', () => {
+  it('accepts local Linux packaging without a release service and rejects signed mode', () => {
+    const target = { platform: 'linux', arch: 'x64' } as const
+    const local = localDesktopPackageEnvironment({
+      DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: 'invalid', DOWNLOAD_PROD_COS_SECRET_KEY: 'unused',
+    })
+    expect(() => { validateDesktopPackageEnvironment(local, target, { unsigned: true }) }).not.toThrow()
+    expect(() => { validateDesktopPackageEnvironment(local, target) }).toThrow(/local unsigned/u)
+    expect(local).not.toHaveProperty('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG')
+    expect(local).not.toHaveProperty('DOWNLOAD_PROD_COS_SECRET_KEY')
+  })
+
   it('loads file-owned compression and defaults to fast Windows archive compression', async () => {
     expect(resolveWindowsPackageSettings({}).compressionLevel).toBe(3)
     await withDirectory(async (directory) => {
@@ -111,7 +122,7 @@ describe('Desktop local packaging configuration', () => {
       DSH_DESKTOP_MACOS_SIGNING_IDENTITY: 'Release identity', CSC_LINK: 'missing.p12',
       APPLE_API_KEY: 'missing.p8', DOWNLOAD_PROD_COS_SECRET_KEY: 'unused-secret',
     }
-    const local = localMacOSPackageEnvironment(parent)
+    const local = localDesktopPackageEnvironment(parent)
     expect(local).toEqual({
       PATH: parent.PATH, HTTPS_PROXY: parent.HTTPS_PROXY, DSH_DESKTOP_NPM_REGISTRY: parent.DSH_DESKTOP_NPM_REGISTRY,
       DSH_DESKTOP_APP_ID: 'com.deepseek.harness', DSH_DESKTOP_UNSIGNED: '1',
@@ -257,7 +268,7 @@ describe('Desktop local packaging configuration', () => {
   })
 
   it('accepts unsigned macOS configuration without Apple or update policy settings while keeping release validation', () => {
-    const local = localMacOSPackageEnvironment({})
+    const local = localDesktopPackageEnvironment({})
     expect(() => { validateDesktopPackageEnvironment(local, MACOS, { unsigned: true }) }).not.toThrow()
     expect(() => { validateDesktopPackageEnvironment(local, MACOS) })
       .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
