@@ -38,6 +38,11 @@ async function bench(mock = RemoteMock.create().load(remoteDefaultResponses), se
   locale.setLocale('zh')
   ctx.provide('locale', locale)
   const remote = new TestRemote(ctx, {
+    authorization: {
+      describe: vi.fn(async () => ({ ok: true, value: null })),
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    },
     credentials: {
       describe: vi.fn(() => Promise.resolve({ ok: true, value: {} })),
       set: vi.fn(),
@@ -111,7 +116,7 @@ describe('ui-settings-models apply', () => {
 
   it('declares the services it uses', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session',
+      'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session', 'remote.authorization',
       'configForms', 'settingsSchema',
     ])
   })

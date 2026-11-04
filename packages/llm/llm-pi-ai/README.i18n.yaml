@@ -21,11 +21,14 @@
   en: f3b761c7c7ecb82f
   zh: e10d999aa348ef86
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/configure-provider-routes:
-  en: 738edb4ae053740d
-  zh: cc6853e2bdac01ec
+  en: 143374cea62157eb
+  zh: 729f838ab799e9e0
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/sign-in-to-a-provider:
-  en: c36f66438638ae08
-  zh: 066a2fc4cb97c86f
+  en: 3540aca5a758de65
+  zh: faf91e7252d00520
+/deepseek-ai-dsh-llm-pi-ai/use-this-package/chatgpt-subscription:
+  en: 2317a9080ceffb8b
+  zh: 423203f4fe33e98b
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/resolve-the-model-catalog:
   en: 376f83206858b601
   zh: 38bb6993609c96a6
@@ -36,8 +39,8 @@
   en: 92f554e1718614ca
   zh: f17ed3ad3e5d28e2
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/discover-models-from-endpoints:
-  en: 6619e8cfe7555c73
-  zh: b2f80c25acb81cf8
+  en: bdba2e7327bcf803
+  zh: fe573008cc37f207
 /deepseek-ai-dsh-llm-pi-ai/use-this-package/failures-and-recovery:
   en: 3c1edbc63de24a1a
   zh: 01592718c3a2c79f
@@ -93,8 +96,8 @@
   en: b6bd570c0159ba08
   zh: 7d2d91eea6a8d830
 /deepseek-ai-dsh-llm-pi-ai/known-limitations-and-deferred-work:
-  en: 1c54b949c81df84f
-  zh: b894d01aa3e6afc1
+  en: 987505d1a1a8107c
+  zh: 64a77e695762a829
 /deepseek-ai-dsh-llm-pi-ai/known-limitations-and-deferred-work/dev-note:
   en: 3678dd0f6642c2a5
   zh: 75cbdd064cc64282

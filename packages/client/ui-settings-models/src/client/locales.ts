@@ -1,7 +1,9 @@
 /** Copy dictionaries for the Models settings section. */
+import { chatGptEn, chatGptZh, chatGptJa, chatGptEs, chatGptFr, chatGptDe, chatGptRu, chatGptPt } from './chatgpt-locales.ts'
 
 /** English strings (the key-set source of truth for this pair). */
 export const en = {
+  ...chatGptEn,
   nav: 'Models',
   deepSeekAccount: 'DeepSeek Account',
   title: 'Models',
@@ -146,6 +148,7 @@ export type ModelsKey = keyof typeof en
 
 /** Chinese strings (same keys as {@link en}). */
 export const zh: { [Key in keyof typeof en]: string } = {
+  ...chatGptZh,
   nav: '模型',
   deepSeekAccount: 'DeepSeek 账号',
   title: '模型',
@@ -287,6 +290,7 @@ export const zh: { [Key in keyof typeof en]: string } = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  ...chatGptJa,
   'nav': 'モデル',
   'deepSeekAccount': 'DeepSeekアカウント',
   'title': 'モデル',
@@ -428,6 +432,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  ...chatGptEs,
   nav: 'Modelos',
   deepSeekAccount: 'Cuenta DeepSeek',
   title: 'Modelos',
@@ -569,6 +574,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  ...chatGptFr,
   nav: 'Modèles',
   deepSeekAccount: 'Compte DeepSeek',
   title: 'Modèles',
@@ -710,6 +716,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  ...chatGptDe,
   nav: 'Modelle',
   deepSeekAccount: 'DeepSeek-Konto',
   title: 'Modelle',
@@ -851,6 +858,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  ...chatGptRu,
   nav: 'Модели',
   deepSeekAccount: 'DeepSeek Аккаунт',
   title: 'Модели',
@@ -992,6 +1000,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  ...chatGptPt,
   nav: 'Modelos',
   deepSeekAccount: 'DeepSeek Conta',
   title: 'Modelos',

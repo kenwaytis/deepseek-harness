@@ -593,6 +593,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'authorizationController',
+    summary: 'Generic transport for authorization; protocol and grant formats remain flow-owned.',
+    description: 'Generic transport for authorization; protocol and grant formats remain flow-owned.',
+    methods: [
+      {
+        signature: '@Remote async describe(scope: string, id: string): Promise<AuthorizationView | null>',
+        description: 'Describe one registered flow without exposing its credential payload.',
+        parameters: [{ name: 'scope', description: 'credential owner\'s scope.' }, { name: 'id', description: 'credential identity within that scope.' }],
+        returns: 'method availability and redacted credential state, or null when no flow exists.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) signIn(scope: string, id: string, method: string, signal: AbortSignal): RemoteStream<AuthorizationFrame, AuthorizationReply>',
+        description: 'Obtain a credential through the caller\'s transient stream. Closing the stream cancels the attempt and withdraws pending questions; answers never address another caller\'s attempt. Provider errors expose only safe codes.',
+        parameters: [{ name: 'scope', description: 'credential owner\'s scope.' }, { name: 'id', description: 'credential identity within that scope.' }, { name: 'method', description: 'one method declared by the registered flow.' }, { name: 'signal', description: 'connection and caller cancellation.' }],
+        returns: 'progress, questions, and one terminal outcome; reads question answers on its uplink.',
+      },
+      {
+        signature: '@Remote async signOut(scope: string, id: string): Promise<void>',
+        description: 'Remove only the credential owned by a registered flow, keeping API-key references and host identity records. An in-flight login must finish first.',
+        parameters: [{ name: 'scope', description: 'credential owner\'s scope.' }, { name: 'id', description: 'credential identity within that scope.' }],
+        returns: 'after local credential removal commits; does not revoke the remote account grant.',
+      },
+    ],
+  },
+  {
     key: 'browserUse',
     summary: 'Owns one optional provider registration in the shared browser-use service.',
     description: 'Owns one optional provider registration in the shared browser-use service.',
@@ -5684,6 +5709,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AuthorizationFlow {\n    readonly key: CredentialKey;\n    readonly label: string;\n    readonly methods: readonly [\n        AuthorizationMethod,\n        ...AuthorizationMethod[]\n    ];\n    run(session: AuthorizationSession): Promise<void>;\n}',
   },
   {
+    name: 'AuthorizationFrame',
+    declaration: 'export type AuthorizationFrame = {\n    readonly type: \'notice\';\n    readonly notice: AuthorizationNotice;\n} | {\n    readonly type: \'prompt\';\n    readonly id: AuthorizationPromptId;\n    readonly prompt: AuthorizationQuestion;\n} | {\n    readonly type: \'withdraw\';\n    readonly id: AuthorizationPromptId;\n} | {\n    readonly type: \'settled\';\n    readonly outcome: AuthorizationOutcome;\n} | {\n    readonly type: \'failed\';\n    readonly code: string;\n};',
+  },
+  {
     name: 'AuthorizationInteraction',
     declaration: 'export interface AuthorizationInteraction {\n    notify(notice: AuthorizationNotice): void;\n    prompt(prompt: AuthorizationPrompt): Promise<string>;\n}',
   },
@@ -5704,8 +5733,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthorizationPrompt = {\n    signal?: AbortSignal;\n} & ({\n    kind: \'text\';\n    message: string;\n    placeholder?: string;\n} | {\n    kind: \'secret\';\n    message: string;\n    placeholder?: string;\n} | {\n    kind: \'select\';\n    message: string;\n    options: readonly AuthorizationPromptOption[];\n});',
   },
   {
+    name: 'AuthorizationPromptId',
+    declaration: 'export type AuthorizationPromptId = Branded<\'AuthorizationPromptId\'>;',
+  },
+  {
     name: 'AuthorizationPromptOption',
     declaration: 'export interface AuthorizationPromptOption {\n    id: string;\n    label: string;\n    description?: string;\n}',
+  },
+  {
+    name: 'AuthorizationQuestion',
+    declaration: 'export type AuthorizationQuestion = Omit<Extract<AuthorizationPrompt, {\n    kind: \'text\';\n}>, \'signal\'> | Omit<Extract<AuthorizationPrompt, {\n    kind: \'secret\';\n}>, \'signal\'> | Omit<Extract<AuthorizationPrompt, {\n    kind: \'select\';\n}>, \'signal\'>;',
+  },
+  {
+    name: 'AuthorizationReply',
+    declaration: 'export interface AuthorizationReply {\n    readonly id: AuthorizationPromptId;\n    readonly value: string;\n}',
   },
   {
     name: 'AuthorizationRequest',
@@ -5722,6 +5763,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AuthorizationStatus',
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
+  },
+  {
+    name: 'AuthorizationView',
+    declaration: 'export interface AuthorizationView {\n    readonly methods: readonly AuthorizationMethod[];\n    readonly inFlight: boolean;\n    readonly kind: \'grant\' | \'api-key\' | null;\n    readonly writable: boolean;\n}',
   },
   {
     name: 'BackendRegistry',

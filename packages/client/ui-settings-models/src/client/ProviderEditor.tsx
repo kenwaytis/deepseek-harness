@@ -273,12 +273,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
       ? schema.setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
+    // Entering a new API key explicitly switches this route away from subscription billing.
+    const profile = layout === 'pi-ai' && keyValue.length > 0 ? schema.deletePath(next, ['auth']) : next
     if (props.credentialOnly !== true) {
       // The same checker gates the submit button, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse
       // the write with a message naming a path instead of the row, and because
       // nothing but this function decides what is written.
-      const failure = validateModels(schema.getPath(next, ['models']))
+      const failure = validateModels(schema.getPath(profile, ['models']))
       /* v8 ignore next 3 -- unreachable from the card: the same failure disables submit */
       if (failure !== undefined) {
         return `${t('model')} ${String(failure.index + 1)}: ${t(failure.key)}`
@@ -286,24 +288,24 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     }
     /* v8 ignore next -- apply is only reachable from the rendered card, which required a resolved node */
     if (props.credentialOnly !== true && node !== undefined && settingsPath.length === 0) {
-      const sectionError = schema.validate(node, next)
+      const sectionError = schema.validate(node, profile)
       if (sectionError !== undefined) return sectionError
     }
     const materializesNativeProfile = layout === 'pi-ai'
       && fallback === undefined
       && committedOriginal === undefined
-      && Object.keys(next).length === 0
+      && Object.keys(profile).length === 0
     const ops: SettingsPathOpView[] = props.credentialOnly === true
       ? []
       : materializesNativeProfile
         ? [{ op: 'set', path: [...settingsPath], value: {} }]
-        : pathOps(settingsPath, committedOriginal, next)
+        : pathOps(settingsPath, committedOriginal, profile)
     if (ops.length > 0) {
       const written = await operations.writeSettings(ns, ops, expectedRevision)
       if (written.kind !== 'written') return written.kind === 'conflict' ? t('conflict') : written.message
       setCommittedOriginal(schema.getPath(written.view.user, settingsPath))
       setExpectedRevision(written.view.revision)
-      setDraft(next)
+      setDraft(profile)
     }
     if (keyValue.length > 0) {
       const stored = await operations.storeCredential(keyRef, keyValue)
@@ -370,7 +372,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // route. Without one, a catalog route authenticates the way the directory
     // reports, and a declared route sends no key at all.
     const namedRef = stringAt(fallback, 'apiKeyEnv')
-    const nativeAuth = namedRef === undefined ? props.nativeAuth : undefined
+    const nativeAuth = namedRef === undefined && stringAt(fallback, 'auth') !== 'chatgpt' ? props.nativeAuth : undefined
     // Display method-neutral references without changing the adapter's lookup.
     const authRefs = namedRef === undefined
       ? (nativeAuth?.env ?? []).filter(ref => !endpointEnv.includes(ref)) : [namedRef]
@@ -434,6 +436,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               disabled={disabled}
               onChange={(event) => { setKeyDraft(event.target.value) }}
             />
+            {stringAt(fallback, 'auth') === 'chatgpt' ? <p className={styles['notice']}>{t('chatGptApiKeyHint')}</p> : null}
             {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
           </div>}

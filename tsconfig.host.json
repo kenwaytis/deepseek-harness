@@ -131,6 +131,7 @@
     "apps/web/tests/desktop-onboarding.e2e.ts",
     "apps/web/tests/bonus-notice.e2e.ts",
     "apps/web/tests/account-login.e2e.ts",
+    "apps/web/tests/openai-subscription.e2e.ts",
     "apps/web/tests/onboarding-usable-provider.e2e.ts",
     "apps/web/tests/remote-settings.e2e.ts",
     "apps/web/tests/public-mount.e2e.ts",

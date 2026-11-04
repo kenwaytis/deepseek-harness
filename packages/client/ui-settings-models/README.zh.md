@@ -39,6 +39,10 @@ kind: "package-reference"
 
 Host 配置 `credentialOnboarding` 默认为 `true`。Electron preload 标记会抑制自动凭证引导和 Web 欢迎须知；模型设置页与显式 API Key 编辑仍然可用。[账号插件](../ui-settings-account/README.zh.md#desktop-onboarding)负责 Desktop 引导。其他原生壳可以通过 `credentialOnboarding: false` 仅禁用凭证步骤。Host 通过 `webserver/index-inject` 发布这个公开的布尔值，Client 在注册弹窗前校验它。它是页面初始化数据，不是持久化的完成标记。
 
+### ChatGPT 订阅
+
+**ChatGPT 订阅**卡片通过系统浏览器登录，无需 API 密钥。授权后，配置流程获取该账号可见的 GPT 模型并启用 OpenAI 订阅配置。**完成配置**在模型列表或设置写入失败后复用登录重试；**重新连接**发起新的授权。**断开连接**移除已保存的授权，但不启用 API 密钥回退。在 OpenAI 编辑器中填写新的 API 密钥会显式切换到独立 API 计费。令牌保留在 Host，Client 只接收连接元数据、通知和临时授权问题。关闭设置会保留未完成的尝试；重新加载应用会取消它。[适配器 README](../../llm/llm-pi-ai/README.zh.md#chatgpt-subscription)负责协议、存储与账号限制。
+
 ### API 密钥
 
 API 密钥输入框初始为空，并通过 `autocomplete="new-password"` 请求浏览器不要自动填入已保存的登录密码。输入非空时，显示与会话密钥遮罩一致的眼睛按钮：**显示密钥**展示当前输入，**隐藏密钥**重新遮住输入。修改或清空输入后会重新遮住密钥。已保存凭据从不读入输入框。

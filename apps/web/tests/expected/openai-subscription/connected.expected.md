@@ -1,0 +1,6 @@
+- region "ChatGPT subscription":
+  - text: ChatGPT subscription
+  - paragraph: Use eligible GPT models with your ChatGPT plan. No API key is needed. Connecting switches the OpenAI provider to subscription usage.
+  - status: Using your ChatGPT plan
+  - button "Reconnect"
+  - button "Disconnect"

@@ -9,6 +9,12 @@
   ],
   "references": [
     {
+      "path": "../../credentials/authorization"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {

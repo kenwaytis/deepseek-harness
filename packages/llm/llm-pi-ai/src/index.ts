@@ -65,11 +65,11 @@ import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigu
 import type {} from '@deepseek-ai/dsh-fs'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { PiAiAdapter } from './adapter.ts'
-import { authContextFrom, credentialStoreFrom } from './auth.ts'
+import { authContextFrom, credentialStoreFrom, recordKeyFor } from './auth.ts'
 import { catalogProvider, catalogProviderIds } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
-import { discoverModels } from './discovery.ts'
+import { discoverChatGptModels, discoverModels } from './discovery.ts'
 import type { StoredModelDiscoveryProfile } from './discovery.ts'
 import { registerPiAiFlows } from './login.ts'
 import { providerDefaultsOf } from './provider-data.ts'
@@ -210,6 +210,13 @@ export function apply(ctx: Context, config: Config): void {
     provider: string,
     profile: ResolvedPiAiProviderProfile,
   ): Promise<string | undefined> => {
+    if (profile.auth === 'chatgpt') {
+      const stored = await ctx.get('credentials')?.describeRecord(recordKeyFor('openai'))
+      if (stored?.kind !== 'grant') {
+        throw new LlmError('Sign in with ChatGPT on the Models page to use your subscription.', 'MISSING_CREDENTIAL')
+      }
+      return undefined
+    }
     const ref = profile.apiKeyEnv
     // Only a profile that names no credential at all defers to pi-ai's
     // provider-native discovery. Once one is named, a miss must fail loud:
@@ -299,10 +306,16 @@ export function apply(ctx: Context, config: Config): void {
   // except the stored credential and deployment-owned headers: the curated UI
   // accepts neither, so an already-configured route supplies both inside the
   // Host rather than widening the discovery request.
-  ctx.llm.registerModelDiscovery(settingsNs, (request, signal) => discoverModels(
-    { ...request, ...signal === undefined ? {} : { signal } },
-    () => storedDiscoveryProfile(request.provider),
-  ))
+  ctx.llm.registerModelDiscovery(settingsNs, async (request, signal) => {
+    if (request.provider === 'openai' && request.apiKey === undefined && request.baseURL === undefined
+      && (await auth.credentials.read('openai'))?.type === 'oauth') {
+      return discoverChatGptModels(auth, signal)
+    }
+    return discoverModels(
+      { ...request, ...signal === undefined ? {} : { signal } },
+      () => storedDiscoveryProfile(request.provider),
+    )
+  })
   // Route effects bind to this apply fiber via the stable `ctx` reference,
   // even when a swap runs inside the scoped settings callback below. A bare
   // mount (zero routes) is the dormant posture: nothing registers until a

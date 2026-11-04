@@ -1,6 +1,6 @@
 /** Page-store join: directory × namespaces × credentials, with last-good rows on failure. */
 import { describe, expect, it } from 'vitest'
-import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
+import type { AuthorizationView, RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { settingsSchema } from './settings-schema.client.ts'
@@ -105,6 +105,7 @@ const NAMESPACES = [
 
 function api(overrides: {
   accountAvailable?: boolean
+  describeAuthorization?: () => Promise<RemoteAnswer<AuthorizationView | null>>
   providers?: () => Promise<RpcResponse<{ providers: typeof DIRECTORY }>>
   describeSettings?: () => Promise<RemoteAnswer<{ writable: boolean; hasDocument: boolean; namespaces: typeof NAMESPACES }>>
   describeCredentials?: (refs: readonly string[]) => Promise<RemoteAnswer<Record<string, unknown>>>
@@ -129,6 +130,7 @@ function api(overrides: {
       : remoteFail(response.result.error.message)
   }
   const face = {
+    authorization: { describe: overrides.describeAuthorization ?? (() => Promise.resolve(remoteOk(null))) },
     session: { modelCatalog: async () => remoteOk({ groups: overrides.accountAvailable
       ? [{ id: 'deepseek-account', models: [{ id: 'deepseek-flash' }] }] : [] }) },
     llm: {
@@ -162,6 +164,31 @@ function api(overrides: {
 }
 
 describe('ModelsSettingsStore', () => {
+  it('retains a visible connection-status failure without failing the provider directory', async () => {
+    const providers = DIRECTORY.map(row => row.provider === 'openai'
+      ? { ...row, nativeAuth: { env: ['OPENAI_API_KEY'], oauth: true } } : row)
+    const { ctx, mirror } = api({
+      providers: () => Promise.resolve(ok({ providers })),
+      describeAuthorization: () => Promise.resolve(remoteFail('credential storage unavailable')),
+    })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    await store.load()
+    expect(store.store.getSnapshot().status).toBe('ready')
+    expect(store.store.getSnapshot().rows.find(row => row.entry.provider === 'openai')).toMatchObject({ authorizationError: true })
+  })
+
+  it('joins the saved ChatGPT grant independently of API-key configuration', async () => {
+    const providers = DIRECTORY.map(row => row.provider === 'openai'
+      ? { ...row, nativeAuth: { env: ['OPENAI_API_KEY'], oauth: true } } : row)
+    const authorization = { methods: [{ id: 'oauth', label: 'ChatGPT' }], kind: 'grant' as const, inFlight: false, writable: true }
+    const { ctx, mirror } = api({
+      providers: () => Promise.resolve(ok({ providers })), describeAuthorization: () => Promise.resolve(remoteOk(authorization)),
+    })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    await store.load()
+    expect(store.store.getSnapshot().rows.find(row => row.entry.provider === 'openai')).toMatchObject({ authorization })
+  })
+
   it('describes native variables without exposing secret values and respects the 64-reference limit', async () => {
     const providers = Array.from({ length: 65 }, (_, index) => ({
       provider: `fixture-${index}`, displayName: 'fixture', settingsNs: 'llm-pi-ai', settingsPath: ['providers', `fixture-${index}`], active: false,

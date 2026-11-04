@@ -25,7 +25,61 @@
 import { INVALID_CREDENTIAL_CODE, LlmError, normalizeApiKey } from '@deepseek-ai/dsh-llm'
 import type { LlmDiscoveredModel, LlmModelDiscoveryOperation } from '@deepseek-ai/dsh-llm'
 import { attributionHeaders } from '@deepseek-ai/dsh-llm'
-import { catalogModels } from './catalog.ts'
+import { catalogModels, catalogProvider } from './catalog.ts'
+import type { PiAiAuthInjection } from './adapter.ts'
+import { createModels } from './models.ts'
+
+/**
+ * Load the selected ChatGPT account's visible models with its OAuth token.
+ * Token refresh uses the same locked store as inference. Failures never return
+ * the API-key catalog or send the grant to a deployment-configured endpoint.
+ * @param auth - durable credential storage and ambient lookup context.
+ * @param signal - cancellation for token resolution and the model-list request.
+ * @returns account-visible models in OpenAI's order, with known catalog capacities.
+ */
+export async function discoverChatGptModels(
+  auth: PiAiAuthInjection,
+  signal?: AbortSignal,
+): Promise<readonly LlmDiscoveredModel[]> {
+  const provider = catalogProvider('openai')
+  if (provider?.auth.oauth === undefined) throw new LlmError('ChatGPT OAuth is unavailable.', 'DISCOVERY_FAILED')
+  const models = createModels(auth)
+  models.setProvider({ ...provider, auth: { oauth: provider.auth.oauth } })
+  const resolved = await models.getAuth('openai', { ...signal === undefined ? {} : { signal } })
+  const token = resolved?.auth.apiKey
+  if (token === undefined) throw new LlmError('Sign in with ChatGPT before fetching subscription models.', 'MISSING_CREDENTIAL')
+  const url = 'https://api.openai.com/v1/models'
+  const response = await fetch(url, {
+    headers: { ...attributionHeaders(), accept: 'application/json', authorization: `Bearer ${token}` },
+    redirect: 'error',
+    ...signal === undefined ? {} : { signal },
+  })
+  if (!response.ok) throw new LlmError(`ChatGPT model listing failed (HTTP ${response.status}). Reconnect ChatGPT and try again.`, 'DISCOVERY_FAILED')
+  const text = await readBounded(response, url)
+  let body: unknown
+  try { body = JSON.parse(text) }
+  catch (error) { throw new LlmError('ChatGPT returned an invalid model listing.', 'DISCOVERY_FAILED', { cause: error }) }
+  const listed: unknown = typeof body === 'object' && body !== null ? Reflect.get(body, 'models') : undefined
+  if (!Array.isArray(listed)) throw new LlmError('ChatGPT returned an invalid model listing.', 'DISCOVERY_FAILED')
+  const installed = catalogModels('openai')
+  const result: LlmDiscoveredModel[] = []
+  const entries: readonly unknown[] = listed
+  for (const raw of entries) {
+    if (typeof raw !== 'object' || raw === null) throw new LlmError('ChatGPT returned an invalid model entry.', 'DISCOVERY_FAILED')
+    if (Reflect.get(raw, 'visibility') !== 'list') continue
+    const id: unknown = Reflect.get(raw, 'slug')
+    const name: unknown = Reflect.get(raw, 'display_name')
+    if (typeof id !== 'string' || id.length === 0 || typeof name !== 'string' || name.length === 0) {
+      throw new LlmError('ChatGPT returned an invalid model entry.', 'DISCOVERY_FAILED')
+    }
+    const known = installed.get(id)
+    result.push({
+      id, name,
+      ...known === undefined ? {} : { contextWindow: known.contextWindow, inputModalities: [...known.input] },
+    })
+  }
+  return result
+}
 
 /**
  * Protocols whose model listing this module can read. OpenAI protocols use

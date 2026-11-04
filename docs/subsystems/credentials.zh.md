@@ -62,6 +62,10 @@ AccountDetails.balance 将充值钱包投影为 value、赠送钱包投影为 bo
 
 赠金通知查询返回 AccountBonusBatch，包含当前 Platform 账号 id 和按服务端顺序排列的可通知订单。AccountBonusNotification 保留服务端消息与到期时间，不投影凭证。确认请求携带预期账号 id 和订单 id；账号变化后 Host 拒绝该请求。两项通知操作都通过 x-client-locale 传递发起界面的语言，不使用语言查询参数。
 
+## 浏览器授权
+
+[配置控制器](../../packages/api/settings-controller/README.zh.md)传递已注册流程，不解释具体协议。`AuthorizationView` 暴露可用方法、尝试状态、凭据种类和可写性，绝不包含凭据载荷。`AuthorizationFrame` 传递通知、问题、问题撤回以及最终结果或安全错误码。`AuthorizationReply` 在同一调用方持有的 Remote 流上，以 branded 问题 ID 关联答案。取消会关闭该尝试；断开连接只移除其已注册的凭据记录。[类型声明](../../packages/api/settings-controller/src/types.ts)负责 wire 字段。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -130,6 +134,47 @@ async begin(request: AuthorizationRequest): Promise<AuthorizationOutcome>
 ```
 
 Source: [`packages/credentials/authorization/src/index.ts`](../../packages/credentials/authorization/src/index.ts)
+
+<a id="ctxauthorizationcontroller--authorizationcontroller"></a>
+
+### `ctx.authorizationController` — `AuthorizationController`
+
+Generic transport for authorization; protocol and grant formats remain flow-owned.
+
+```ts cordis-catalog
+/**
+ * Describe one registered flow without exposing its credential payload.
+ * @param scope - credential owner's scope.
+ * @param id - credential identity within that scope.
+ * @returns method availability and redacted credential state, or null when no flow exists.
+ */
+@Remote async describe(scope: string, id: string): Promise<AuthorizationView | null>
+
+/**
+ * Obtain a credential through the caller's transient stream. Closing the
+ * stream cancels the attempt and withdraws pending questions; answers never
+ * address another caller's attempt. Provider errors expose only safe codes.
+ * @param scope - credential owner's scope.
+ * @param id - credential identity within that scope.
+ * @param method - one method declared by the registered flow.
+ * @param signal - connection and caller cancellation.
+ * @returns progress, questions, and one terminal outcome; reads question answers on its uplink.
+ */
+@Remote({ mode: 'stream' }) signIn(scope: string, id: string, method: string, signal: AbortSignal): RemoteStream<AuthorizationFrame, AuthorizationReply>
+
+/**
+ * Remove only the credential owned by a registered flow, keeping API-key
+ * references and host identity records. An in-flight login must finish first.
+ * @param scope - credential owner's scope.
+ * @param id - credential identity within that scope.
+ * @returns after local credential removal commits; does not revoke the remote account grant.
+ */
+@Remote async signOut(scope: string, id: string): Promise<void>
+```
+
+Types: [RemoteStream](typert.zh.md)
+
+Source: [`packages/api/settings-controller/src/authorization.ts`](../../packages/api/settings-controller/src/authorization.ts)
 
 <a id="ctxcredentials--credentialprovider-abstract-seam"></a>
 

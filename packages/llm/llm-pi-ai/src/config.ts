@@ -90,6 +90,8 @@ export type {
 
 /** Configuration for one pi-ai provider route; the `providers` dict key IS the route. */
 export interface PiAiProviderProfile {
+  /** ChatGPT subscription only: OpenAI Responses with OAuth, never API-key fallback. Omission keeps native provider authentication. */
+  auth?: 'chatgpt'
   /** Credential reference (environment-variable name) resolved per request through `ctx.credentials`. */
   apiKeyEnv?: string
   /** Name shown by configuration surfaces; defaults to the route key. */
@@ -324,6 +326,7 @@ const modelProfile: z<PiAiModelProfile> = z.object({
 const modelOverride: z<PiAiModelOverride> = z.object(modelFields)
 
 const profile = z.object({
+  auth: z.const('chatgpt'),
   apiKeyEnv: z.string().role('credential-ref'),
   displayName: z.string(),
   api: z.union(supportedProtocols()),
@@ -418,6 +421,21 @@ export function resolveProfiles(
   const resolved = new Map<string, ResolvedPiAiProviderProfile>()
   for (const [provider, source] of entries) {
     rejectRemovedFields(provider, source)
+    if (source.auth === 'chatgpt') {
+      if (provider !== 'openai' || source.apiKeyEnv !== undefined
+        || (source.api !== undefined && source.api !== 'openai-responses')
+        || (source.baseURL !== undefined && source.baseURL !== 'https://api.openai.com/v1')) {
+        throw new Error('llm-pi-ai: auth "chatgpt" requires the openai route, the official Responses endpoint, and no apiKeyEnv')
+      }
+      if (Object.keys(source.headers ?? {}).some(name => name.toLowerCase() === 'authorization')) {
+        throw new Error('llm-pi-ai: auth "chatgpt" does not permit an Authorization header override')
+      }
+      if (source.compat?.supportsStore === false
+        || source.models?.some(model => model.compat?.supportsStore === false)
+        || Object.values(source.modelOverrides ?? {}).some(model => model.compat?.supportsStore === false)) {
+        throw new Error('llm-pi-ai: auth "chatgpt" requires supportsStore so every Responses request sends store: false')
+      }
+    }
     if (provider.length === 0) throw new Error('llm-pi-ai: provider names must be non-empty')
     if (source.baseURL !== undefined && source.baseURL.length === 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" has an empty baseURL`)
@@ -482,6 +500,7 @@ export function resolveProfiles(
         ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
         models: catalog.models,
         namesCredential: source.apiKeyEnv !== undefined,
+        ...source.auth === undefined ? {} : { auth: source.auth },
       })
     } catch (error) {
       if (validation === 'strict' || !(error instanceof PiAiCatalogError)) throw error

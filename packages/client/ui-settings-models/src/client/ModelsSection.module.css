@@ -61,6 +61,12 @@
   gap: 12px;
 }
 
+.subscriptionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .rowHead {
   display: flex;
   align-items: center;

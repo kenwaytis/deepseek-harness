@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
 import { Context } from '@deepseek-ai/cordis'
 import { bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ChatGptActions, ChatGptState } from '../src/client/chatgpt.ts'
 import type {
   CredentialInfo, RemoteResult, SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
@@ -48,6 +50,7 @@ function capacityInputs(label: string): HTMLInputElement[] {
 
 const PiAiConfig = Schema.object({
   providers: Schema.dict(Schema.object({
+    auth: Schema.const('chatgpt'),
     apiKeyEnv: Schema.string().role('credential-ref'),
     api: Schema.union(['openai-completions', 'openai-responses', 'anthropic-messages']),
     baseURL: Schema.string(),
@@ -313,7 +316,7 @@ function cardSeatCalls(
     ])
 }
 
-async function mountFace(scripted: ReturnType<typeof scriptedFace>) {
+async function mountFace(scripted: ReturnType<typeof scriptedFace>, extras: Partial<ModelsSectionProps> = {}) {
   const { face, update, mutate, set, unset } = scripted
   const ctx = ctxWith(face)
   const mirror = new SettingsDescribeMirror(ctx)
@@ -327,6 +330,7 @@ async function mountFace(scripted: ReturnType<typeof scriptedFace>) {
     schema: settingsSchema,
     t,
     renderSlot: renderSlot as unknown as ModelsSectionProps['renderSlot'],
+    ...extras,
   }
   const view = render(<ModelsSection {...injected} />)
   return { view, ctx, face, update, mutate, set, unset, controller, mirror, renderSlot }
@@ -361,6 +365,50 @@ async function mountDeepSeekCard(overrides: Parameters<typeof scriptedFace>[0] =
 }
 
 describe('ModelsSection', () => {
+  it('renders native connection state and explicitly switches to API billing only when a key is entered', async () => {
+    const interaction = createSnapshotStore<ChatGptState>({ status: 'idle', notice: null, prompt: null, failure: null })
+    const actions: ChatGptActions = { connect: vi.fn(), answer: vi.fn(), cancel: vi.fn(), disconnect: vi.fn() }
+    const mounted = await mountFace(scriptedFace(), { chatGpt: actions, useChatGpt: bindSnapshotSelector(interaction) })
+    expect(screen.queryByRole('region', { name: en.chatGptTitle })).toBeNull()
+    await act(async () => { mounted.controller.store.update((s) => {
+      s.rows = s.rows.map(row => row.entry.provider === 'openai' ? { ...row, authorizationError: true } : row)
+    }) })
+    expect(screen.getByText(en.chatGptStatusError)).toBeTruthy()
+    const namespace = piAiNamespaceWith('openai', { auth: 'chatgpt' })
+    const account = { methods: [{ id: 'oauth', label: 'ChatGPT' }], kind: 'grant' as const, inFlight: false, writable: true }
+    const subscribedNamespaces = new Map(mounted.controller.store.getSnapshot().namespaces).set('llm-pi-ai', namespace)
+    await act(async () => { mounted.controller.store.update((s) => {
+      s.namespaces = subscribedNamespaces
+      s.rows = s.rows.map((row) => {
+        if (row.entry.provider !== 'openai') return row
+        const updated = { ...row, subscription: true, authorization: account, apiKeyEnv: undefined, credential: undefined }
+        delete updated.authorizationError
+        return updated
+      })
+    }) })
+    expect(screen.getByText(en.chatGptConnected)).toBeTruthy()
+    const openai = mounted.controller.store.getSnapshot().rows.find(row => row.entry.provider === 'openai')!
+    const withoutPiAi = new Map(subscribedNamespaces)
+    withoutPiAi.delete('llm-pi-ai')
+    await act(async () => { mounted.controller.store.update((s) => {
+      s.namespaces = withoutPiAi
+      s.rows = s.rows.map(row => row.entry.provider === 'openai' ? { ...row, configured: false } : row)
+    }) })
+    expect(screen.queryByRole('region', { name: en.chatGptTitle })).toBeNull()
+    await act(async () => { mounted.controller.store.update((s) => {
+      s.namespaces = subscribedNamespaces
+      s.rows = s.rows.map(row => row.entry.provider === 'openai' ? openai : row)
+    }) })
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    expect(screen.getByText(en.chatGptApiKeyHint)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'explicit-api-key' } })
+    fireEvent.click(screen.getByRole('button', { name: en.apply }))
+    await waitFor(() => { expect(mounted.mutate).toHaveBeenCalledWith('llm-pi-ai', expect.arrayContaining([
+      { op: 'set', path: ['providers', 'openai', 'apiKeyEnv'], value: 'OPENAI_API_KEY' },
+      { op: 'unset', path: ['providers', 'openai', 'auth'] },
+    ]), 0) })
+  })
+
   it('keeps the credential state unconfirmed when its redacted read fails', async () => {
     const scripted = scriptedFace()
     scripted.face.credentials.describe.mockResolvedValue(remoteFail('credentials unavailable', 'gateway/internal'))

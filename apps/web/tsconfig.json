@@ -148,6 +148,7 @@
     "tests/desktop-onboarding.e2e.ts",
     "tests/bonus-notice.e2e.ts",
     "tests/account-login.e2e.ts",
+    "tests/openai-subscription.e2e.ts",
     "tests/onboarding-usable-provider.e2e.ts",
     "tests/remote-settings.e2e.ts",
     "tests/public-mount.e2e.ts",

@@ -9,6 +9,10 @@
   - button "关闭"
   - heading "模型" [level=2]
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
+  - region "ChatGPT 订阅":
+    - text: ChatGPT 订阅
+    - paragraph: 使用 ChatGPT 套餐中的可用 GPT 模型，无需 API 密钥。连接后，OpenAI 提供商将切换为使用订阅额度
+    - button "使用 ChatGPT 继续"
   - list:
     - listitem:
       - text: DeepSeek

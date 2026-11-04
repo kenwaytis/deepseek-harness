@@ -9,7 +9,7 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {
-  CredentialInfo, LlmConfigurableProvider, LlmNativeAuth, LlmProviderInfo, SettingsNamespaceView,
+  AuthorizationView, CredentialInfo, LlmConfigurableProvider, LlmNativeAuth, LlmProviderInfo, SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -77,6 +77,12 @@ export function joinProviderDirectory(
 
 /** One provider row the page renders. */
 export interface ProviderRow {
+  /** OpenAI profile explicitly requires ChatGPT subscription authentication. */
+  subscription?: boolean
+  /** Registered login availability and redacted grant state; null means no authorization service. */
+  authorization?: AuthorizationView | null
+  /** The Host could not describe the connection; no credential payload is retained. */
+  authorizationError?: true
   /** Account route has usable credentials for the configured inference origin. */
   accountAvailable?: boolean
   /** The directory entry (route id, display name, settings address, live state). */
@@ -262,8 +268,17 @@ export class ModelsSettingsStore {
         removable,
         apiKeyEnv: entry.provider === 'deepseek-account' ? undefined : apiKeyEnvOf(namespace, entry.settingsPath, this.schema),
         credential: undefined,
+        ...entry.provider !== 'openai' ? {} : {
+          subscription: this.schema.getPath(namespace?.value, [...entry.settingsPath, 'auth']) === 'chatgpt',
+        },
       }
     })
+    const openai = rows.find(row => row.entry.provider === 'openai' && row.entry.settingsNs === 'llm-pi-ai' && row.entry.nativeAuth?.oauth === true)
+    if (openai !== undefined) {
+      const response = await this.ctx.remote.authorization.describe('llm-pi-ai', 'openai')
+      if (response.ok) openai.authorization = response.value
+      else openai.authorizationError = true
+    }
     if (rows.some(row => row.entry.provider === 'deepseek-account')) {
       const catalog = await this.ctx.remote.session.modelCatalog()
       for (const row of rows) {
@@ -341,6 +356,7 @@ export class ModelsSettingsStore {
 export function providerUsable(row: ProviderRow): boolean {
   if (!row.entry.active) return false
   if (row.entry.provider === 'deepseek-account') return row.accountAvailable === true
+  if (row.subscription === true) return row.authorization?.kind === 'grant'
   if (row.apiKeyEnv === undefined) return true
   return row.credential?.configured === true
 }

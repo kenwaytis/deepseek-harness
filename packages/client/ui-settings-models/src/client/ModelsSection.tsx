@@ -29,6 +29,8 @@ import type { LlmNativeAuth, SettingsNamespaceView } from '@deepseek-ai/dsh-api-
 // Type-only: pulls this package's SlotMap merge (the two Models child slots).
 import type {} from './slot-contract.ts'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
+import { ChatGptCard } from './ChatGptCard.tsx'
+import type { ChatGptActions, ChatGptConnection } from './chatgpt.ts'
 import { deriveKeyRef, protocolChoices, providerUsable, reasoningLevelChoices } from './store.ts'
 import type { ModelsSettingsStore, ProviderRow } from './store.ts'
 import type { ModelsOperations } from './operations.ts'
@@ -44,7 +46,11 @@ export interface ModelsSectionInjected {
   hooks: {
     /** Page snapshot bound by the UI renderer as useSnapshot. */
     snapshot: ModelsSettingsStore['store']
+    /** Active subscription authorization, retained across page remounts. */
+    chatGpt: ChatGptConnection['store']
   }
+  /** Native ChatGPT authorization actions; absent when the composition supplies no subscription UI. */
+  chatGpt?: ChatGptActions
   /** The Host operations the section and its cards invoke. */
   operations: ModelsOperations
   /** Settings schema and immutable path callbacks. */
@@ -74,7 +80,8 @@ type ModelsRenderSlot = PropsRenderSlots<ModelsChildSlots>['renderSlot']
  */
 export type ModelsSectionProps = Partial<InjectFace<ModelsSectionInjected>> & PropsRenderSlots<ModelsChildSlots>
 
-type ModelsSectionFace = InjectFace<ModelsSectionInjected>
+type ModelsSectionFace = Omit<InjectFace<ModelsSectionInjected>, 'useChatGpt'>
+  & Partial<Pick<InjectFace<ModelsSectionInjected>, 'useChatGpt'>>
 
 /** Provider identity shared by row actions and confirmation copy. */
 export interface ProviderIdentity {
@@ -236,16 +243,25 @@ export function providerCopy(template: string, target: ProviderIdentity): string
  * @returns the section, or null while the shell has not injected yet.
  */
 export function ModelsSection(props: ModelsSectionProps): ReactNode {
-  const { controller, useSnapshot, operations, schema, t, renderSlot } = props
+  const { controller, useSnapshot, operations, schema, t, renderSlot, chatGpt, useChatGpt } = props
   if (
     controller === undefined || useSnapshot === undefined || operations === undefined
     || schema === undefined || t === undefined
   ) return null
-  return <Loaded injected={{ controller, useSnapshot, operations, schema, t }} renderSlot={renderSlot} />
+  return <Loaded injected={{ controller, useSnapshot, operations, schema, t,
+    ...chatGpt === undefined ? {} : { chatGpt }, ...useChatGpt === undefined ? {} : { useChatGpt },
+  }} renderSlot={renderSlot} />
+}
+
+/** The framework-bound subscription hook is read only while its card is mounted. */
+function Subscription({ useChatGpt, ...props }: Omit<import('./ChatGptCard.tsx').ChatGptCardProps, 'state'> & {
+  useChatGpt: NonNullable<ModelsSectionFace['useChatGpt']>
+}): ReactNode {
+  return <ChatGptCard {...props} state={useChatGpt(value => value)} />
 }
 
 function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderSlot: ModelsRenderSlot }): ReactNode {
-  const { controller, operations, schema, t } = injected
+  const { controller, operations, schema, t, chatGpt, useChatGpt } = injected
   const snapshot = injected.useSnapshot(value => value)
   const state = { ...snapshot, rows: snapshot.rows.map(row => row.entry.provider === 'deepseek-account'
     ? { ...row, entry: { ...row.entry, displayName: t('deepSeekAccount') } } : row) }
@@ -414,6 +430,13 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
     <div className={styles['section']}>
       <h2 className={styles['title']}>{t('title')}</h2>
       <p className={styles['intro']}>{t('intro')}</p>
+      {chatGpt === undefined || useChatGpt === undefined ? null : state.rows.map((row) => {
+        const namespace = state.namespaces.get(row.entry.settingsNs)
+        if (row.entry.provider !== 'openai' || namespace === undefined
+          || (row.authorization == null && row.authorizationError !== true)) return null
+        return <Subscription key={row.entry.provider} row={row} namespace={namespace}
+          actions={chatGpt} useChatGpt={useChatGpt} readOnly={!state.writable} t={t} />
+      })}
       {!state.writable && state.status === 'ready' ? <p className={styles['notice']}>{t('readOnly')}</p> : null}
       {savedIdentity === undefined
         ? null
