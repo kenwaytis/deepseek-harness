@@ -27,6 +27,8 @@ kind: "package-reference"
 
 新命令从 Session 的当前工作目录启动。相对 `workdir` 从该目录解析；单次调用的覆盖值与后台任务不会改变该目录。
 
+存在 Agent 注册的执行上下文时，工具使用它而非本机编排上下文。`nativePlatformOnly` 默认为 `false`；启用后，仅当该 Session 的子进程环境为 Windows 时才提供 PowerShell，并在其他步骤中省略 PowerShell 指导。内置 Web 预设为[远程工作](../../ssh/remote-work/README.zh.md)启用此选项。
+
 在 agent 需要运行 PowerShell 命令的任何组合中加载本插件——通常是 `ctx.shell` 由 PowerShell 执行器支撑的 Windows 组合。一旦挂载执行器提供方与 `dsh-shell-env` 注册表，它就注册 `pwsh` 工具。
 
 ### 何时选择

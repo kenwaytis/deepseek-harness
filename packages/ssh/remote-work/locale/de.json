@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Remote-Arbeit",
+    "description": "Verbindet SSH-Computer und trennt entfernte Dateien, Befehle und Terminals von der lokalen Agent-Steuerung."
+  }
+}

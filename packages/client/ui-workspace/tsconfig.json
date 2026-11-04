@@ -8,6 +8,7 @@
     "src"
   ],
   "references": [
+    { "path": "../remote-work" },
     {
       "path": "../../api/session-controller/tsconfig.client.json"
     },

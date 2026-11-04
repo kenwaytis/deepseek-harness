@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, posix, win32 } from 'node:path'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
@@ -523,9 +523,15 @@ export class SubagentManager {
 
   /** Capture the explicit or inherited directory while the parent still owns startup. */
   private async resolveDirectory(request: Pick<SubagentStartRequest, 'parent' | 'cwd'>, signal: AbortSignal): Promise<string> {
-    const cwd = request.cwd !== undefined && isAbsolute(request.cwd)
+    if (request.cwd !== undefined && isAbsolute(request.cwd)) {
+      signal.throwIfAborted()
+      return request.cwd
+    }
+    const parent = await this.ctx.workingDirectory.ensure(request.parent, signal)
+    const paths = /^[A-Za-z]:[/\\]/u.test(parent) || parent.startsWith('\\\\') ? win32 : posix
+    const cwd = request.cwd !== undefined && paths.isAbsolute(request.cwd)
       ? request.cwd
-      : resolve(await this.ctx.workingDirectory.ensure(request.parent, signal), request.cwd ?? '.')
+      : paths.resolve(parent, request.cwd ?? '.')
     signal.throwIfAborted()
     return cwd
   }

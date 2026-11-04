@@ -13,6 +13,17 @@ import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-ses
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /** Prepare a project directory in its execution environment before creating a Session.
+     * @param path - original project identity.
+     * @param next - create a local directory when no execution provider handles it.
+     * @mode waterfall
+     */
+    'session-controller/ensure-directory'(path: string, next: () => Promise<void>): Promise<void>
+  }
+}
+
 /** Cold Session identity absent from persistence. */
 export class ApiSessionNotFound extends Error {}
 
@@ -446,7 +457,10 @@ export class ApiSessionAgentController {
 
   private async createAgent(sessionId: SessionId, cwd: string, composition: ApiSessionComposition): Promise<Agent> {
     try {
-      await mkdir(cwd, { recursive: true })
+      await this.ctx.waterfall('session-controller/ensure-directory', cwd, async () => {
+        if (/^dsh-[a-z][a-z0-9+.-]*:/iu.test(cwd)) throw new Error('No execution provider handles this project directory')
+        await mkdir(cwd, { recursive: true })
+      })
     } catch (error: unknown) {
       throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
     }

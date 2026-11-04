@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Trabajo remoto",
+    "description": "Conecta equipos SSH y separa sus archivos, comandos y terminales del control local del Agent."
+  }
+}

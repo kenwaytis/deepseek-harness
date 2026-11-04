@@ -4,6 +4,7 @@
  */
 
 import { isAbsolute } from 'node:path'
+import { isAbsoluteWorkspacePath, remoteDirectoryOf } from '@deepseek-ai/dsh-util-workspace-path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
@@ -78,7 +79,8 @@ export class WorkingDirectoryService extends Service {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    const directorySchema = zod.string().min(1).refine(isAbsolute).nullable()
+    const directorySchema = zod.string().min(1)
+      .refine(value => isAbsoluteWorkspacePath(value) || remoteDirectoryOf(value) !== undefined).nullable()
     this.workingDirectoryProjectionHandle = await ctx.sessionProjections.register({
       key: 'workingDirectory',
       stateVersion: 1,
@@ -134,15 +136,18 @@ export class WorkingDirectoryService extends Service {
   ensure(agent: Agent, signal?: AbortSignal): Promise<string> {
     return this.serialize(agent, signal, async (control) => {
       const current = this.get(agent.session)
-      const target = await this.ctx.fs.resolve(current, { signal: control })
+      const target = await this.ctx.fs.resolve(current, { signal: control,
+        ...agent.session.header.cwd === undefined ? {} : { cwd: agent.session.header.cwd },
+      })
       const info = await this.ctx.fs.stat(target, control)
       control.throwIfAborted()
       agent.ctx.fiber.assertActive()
       if (info?.type === 'directory') {
-        if (this.workingDirectoryProjectionHandle.stateOf(agent.session) === null) {
-          agent.session.append('working-directory/change', { cwd: current })
+        const canonical = this.ctx.fs.processPath(target)
+        if (this.workingDirectoryProjectionHandle.stateOf(agent.session) === null || remoteDirectoryOf(current) !== undefined) {
+          agent.session.append('working-directory/change', { cwd: canonical })
         }
-        return current
+        return canonical
       }
       const original = agent.session.header.cwd ?? this.defaultDirectory
       const restored = await this.directory(original, original, control)
@@ -213,7 +218,8 @@ export class WorkingDirectoryService extends Service {
     const operation = (this.pending.get(session) ?? Promise.resolve()).then(() => {
       control.throwIfAborted()
       agent.ctx.fiber.assertActive()
-      return action(control)
+      const agents = this.ctx.get('agents')
+      return agents === undefined ? action(control) : agents.withInitiator(agent, () => action(control))
     })
     const settled = operation.finally(() => this.operations.delete(settled))
     this.operations.add(settled)

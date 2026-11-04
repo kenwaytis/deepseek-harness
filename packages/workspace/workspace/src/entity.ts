@@ -9,6 +9,7 @@
  */
 
 import { stat } from 'node:fs/promises'
+import { remoteDirectoryOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
@@ -130,7 +131,7 @@ export class WorkspaceEntity implements Workspace {
           { cause: error },
         )
       }
-      if (!(await stat(cwd)).isDirectory()) {
+      if (remoteDirectoryOf(cwd) === undefined && !(await stat(cwd)).isDirectory()) {
         throw new Error(
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
           + `its cwd '${header.cwd}' is not a directory`,

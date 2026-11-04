@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Travail à distance",
+    "description": "Connecte des ordinateurs SSH et sépare leurs fichiers, commandes et terminaux du contrôle local de l’Agent."
+  }
+}

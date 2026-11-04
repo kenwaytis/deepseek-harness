@@ -13,8 +13,9 @@ export const processIdSchema = z.uuid().transform((value): SshProcessId => value
 /** Admit a text iterator identity from the private helper protocol. */
 export const textStreamIdSchema = z.uuid().transform((value): SshTextStreamId => value as SshTextStreamId)
 
-/** A remote POSIX absolute path; spelling is preserved until remote canonicalization. */
-export const remotePath = z.string().min(1).refine(value => value.startsWith('/') && !value.includes('\0'), 'expected an absolute POSIX path')
+/** An absolute execution-world path; spelling is preserved until remote canonicalization. */
+export const remotePath = z.string().min(1).refine(value => !value.includes('\0')
+  && (value.startsWith('/') || /^[A-Za-z]:[/\\]/u.test(value) || value.startsWith('\\\\')), 'expected an absolute execution-world path')
 /** Filesystem identity returned by the remote filesystem provider. */
 export const targetSchema = z.object({ targetKey: remotePath, displayPath: z.string() }).strict()
 /** Remote metadata observation. */

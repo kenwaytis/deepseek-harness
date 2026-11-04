@@ -254,6 +254,7 @@ export class AgentRegistry extends Service {
 
   private turnBoundaryProjectionHandle!: ProjectionHandle<TurnBoundaryProjection>
   private store = new Map<SessionId, AgentEntry>()
+  private readonly executionContexts = new WeakMap<Agent, { readonly context: Context }>()
   private factory: FactorySlot | undefined
   private readonly initiators = new AsyncLocalStorage<Agent | undefined>()
   private readonly initiatorRuns = new AsyncLocalStorage<InitiatorRun>()
@@ -320,6 +321,37 @@ export class AgentRegistry extends Service {
   currentInitiator(): Agent | undefined {
     this.assertInitiatorsReadable()
     return this.initiators.getStore()
+  }
+
+  /**
+   * Bind capability consumers to an Agent's execution environment without moving its loop or model adapter.
+   * The caller registers the returned disposer as an effect and preserves the Session's original execution computer.
+   * @param agent - Agent receiving the execution services.
+   * @param execution - context containing the execution providers; must be ready before registration.
+   * @returns disposer removing only this registration.
+   * @throws when the Agent already has an execution environment.
+   */
+  registerExecutionContext(agent: Agent, execution: Context): () => void {
+    if (this.executionContexts.has(agent)) throw new Error('Agent execution environment is already registered')
+    const binding = { context: execution }
+    this.executionContexts.set(agent, binding)
+    return () => { if (this.executionContexts.get(agent) === binding) this.executionContexts.delete(agent) }
+  }
+
+  /**
+   * Select execution services independently of the Agent's local orchestration services.
+   * @param agent - Agent whose directory identifies its execution computer.
+   * @param localContext - caller's injected services for local Sessions; omitted uses the Agent context.
+   * @returns the registered context, or localContext for an ordinary local directory.
+   * @throws when a computer-qualified directory has no registered provider; never falls back to local execution.
+   */
+  executionContext(agent: Agent, localContext: Context = agent.ctx): Context {
+    const execution = this.executionContexts.get(agent)
+    if (execution !== undefined) return execution.context
+    if (/^dsh-[a-z][a-z0-9+.-]*:/u.test(agent.session.header.cwd ?? '')) {
+      throw new Error('The Session execution provider is unavailable; restore its connection before continuing')
+    }
+    return localContext
   }
 
   /**

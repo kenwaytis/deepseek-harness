@@ -113,7 +113,7 @@ export class SshFileSystem extends FileSystem {
     return await this.call('fs.move', { source, destination, options, policy }, moveResultSchema, signal) as FsMoveOutcome
   }
 
-  private async call<T>(method: string, params: unknown, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> {
+  protected async call<T>(method: string, params: unknown, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> {
     try { return await this.ctx.ssh.request(method, params, schema, signal) } catch (error) {
       if (error instanceof RemoteOperationError && error.code !== undefined && errorCodes.has(error.code)) {
         throw new FsError(error.message, error.code as FsErrorCode, { cause: error })

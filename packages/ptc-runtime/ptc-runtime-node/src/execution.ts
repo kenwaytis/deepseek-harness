@@ -2,6 +2,8 @@
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent'
+import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
@@ -73,6 +75,8 @@ class NodeExecution {
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
+    const unavailable = this.executionFailure(sandboxPolicy)
+    if (unavailable !== undefined) throw Object.assign(new Error(unavailable), { code: 'PTC_EXECUTION_UNAVAILABLE' })
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
     if (!isAbsolute(cwd)) throw new Error(`${this.mode.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: cwd must be absolute`)
     return { ...request, sandboxPolicy, cwd, timeoutMs: request.timeoutMs === null ? null : clampTimeout(request.timeoutMs, this.config.timeoutMs, this.config.maxTimeoutMs, this.mode.retainsState ? 'persistent PTC timeoutMs' : 'ptc-runtime-node: timeoutMs') }
@@ -85,6 +89,8 @@ class NodeExecution {
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
     if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
+    const unavailable = this.executionFailure(spec.sandboxPolicy)
+    if (unavailable !== undefined) return { logs: [], error: { kind: 'sandbox-unavailable', message: unavailable } }
     if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
     const bindings = validateBindings(spec)
     const owner = this.mode.retainsState ? spec.stateOwner : undefined
@@ -111,6 +117,19 @@ class NodeExecution {
     try { return await worker.run(spec, bindings) } finally {
       if (owner === undefined && worker.cleanupComplete) this.workers.delete(worker)
     }
+  }
+
+  private executionFailure(policy: SandboxExecutionPolicy): string | undefined {
+    const agents = this.ctx.get('agents')
+    const agent = policy.sessionId === undefined ? agents?.currentInitiator() : agents?.get(policy.sessionId)
+    if (agent === undefined || agents === undefined) return undefined
+    let execution: Context
+    try { execution = agents.executionContext(agent, this.ctx) }
+    catch (error) { return error instanceof Error ? error.message : String(error) }
+    if (execution.get('subprocess') !== this.ctx.get('subprocess')) {
+      return 'This Node PTC provider cannot execute on the Session computer. Use the standard Agent preset and native tools instead.'
+    }
+    return undefined
   }
 
   /**

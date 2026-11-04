@@ -14,6 +14,8 @@ import type {
   SessionPendingInteraction, SessionStatus, SessionStatusSnapshot,
 } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ComputerId, RemoteComputer } from '@deepseek-ai/dsh-client-remote-work/client'
+import { remoteDirectory } from '@deepseek-ai/dsh-util-workspace-path'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { DirectoryFlowOwnerProps, WorkspaceActionRequest, WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
@@ -112,6 +114,12 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const request = createSnapshotStore<WorkspaceActionRequest | null>(null)
   const store = createWorkspaceViewStore().create()
   const props: WorkspaceBrowserProps = {
+    useComputers: hook({ items: [], phase: 'ready' as const }),
+    useRemoteWorkAvailable: hook(false),
+    connectComputer: vi.fn(async () => ({ kind: 'trust-required' as const, fingerprint: 'SHA256:test' })),
+    disconnectComputer: vi.fn(async () => {}),
+    browseComputer: vi.fn(async () => ({ path: '/home/test', entries: [] })),
+    addRemoteFolder: vi.fn(async () => {}),
     openWorkspaceMenu: vi.fn(),
     useWorkspaceActionRequest: bindSnapshotSelector(request),
     settleWorkspaceAction: () => { request.set(null) },
@@ -166,6 +174,92 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  const computerId = 'e7250a7e-8bdf-4a6f-942c-cb3e2cdb0b02' as ComputerId
+  const computer: RemoteComputer = { id: computerId, name: 'Windows workstation', host: '192.0.2.10', port: 22,
+    username: 'developer', fingerprint: 'SHA256:test', platform: 'win32', home: 'C:\\Users\\developer' }
+
+  it('groups local and remote folders below their computers and keeps Session rows inside their folder', () => {
+    mount({
+      useRemoteWorkAvailable: hook(true),
+      useComputers: hook({ phase: 'ready' as const, items: [{ computer, status: 'connected' as const }] }),
+      useWorkspaces: hook(workspaceState([workspace('local', []), { ...workspace('remote', ['task'], 'Remote folder'), path: remoteDirectory(computerId, 'C:\\work') }])),
+      useSessions: hook(sessionState([summary('task', 1, { displayTitle: 'Remote task' })])),
+    })
+    expect(within(screen.getByRole('group', { name: '本机' })).getByText('local')).toBeTruthy()
+    const remote = screen.getByRole('group', { name: computer.name })
+    expect(within(remote).getByText('Remote folder')).toBeTruthy()
+    expect(within(remote).queryByText('local')).toBeNull()
+    fireEvent.click(within(remote).getByText('Remote folder'))
+    expect(within(remote).getByText('Remote task')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: computer.name }))
+    expect(screen.queryByText('Remote task')).toBeNull()
+    expect(screen.queryByText('Remote folder')).toBeNull()
+    expect(screen.getByText('local')).toBeTruthy()
+  })
+
+  it('uses the unified computer tree even when an older viewing preference selected the flat list', () => {
+    createWorkspaceViewStore().create().actions.setGroupBy('flat')
+    mount({ useRemoteWorkAvailable: hook(true), useWorkspaces: hook(workspaceState([workspace('project', [])])) })
+    expect(within(screen.getByRole('group', { name: '本机' })).getByText('project')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    expect(screen.queryByRole('menuitem', { name: '单列表' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: '手动排序' })).toBeTruthy()
+  })
+
+  it('shows remote folders without exposing computer administration when connection details are unavailable', () => {
+    mount({ useRemoteWorkAvailable: hook(false),
+      useWorkspaces: hook(workspaceState([{ ...workspace('remote', [], 'Shared folder'), path: remoteDirectory(computerId, '/work') }])),
+    })
+    expect(within(screen.getByRole('group', { name: '远程电脑' })).getByText('Shared folder')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '管理“Windows workstation”的连接' })).toBeNull()
+  })
+
+  it('confirms the SSH fingerprint before installation and never persists the password draft', async () => {
+    const connectComputer = vi.fn<WorkspaceBrowserProps['connectComputer']>()
+      .mockResolvedValueOnce({ kind: 'trust-required', fingerprint: 'SHA256:test' })
+      .mockResolvedValueOnce({ kind: 'connected', computer })
+    mount({ connectComputer, useRemoteWorkAvailable: hook(true) })
+    fireEvent.click(screen.getByRole('button', { name: '添加' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '通过 SSH 连接电脑' }))
+    fireEvent.change(screen.getByLabelText('主机地址'), { target: { value: '192.0.2.10' } })
+    fireEvent.change(screen.getByLabelText('SSH 用户名'), { target: { value: 'developer' } })
+    fireEvent.change(screen.getByLabelText('密码（可选，不保存）'), { target: { value: 'memory-only-test' } })
+    fireEvent.click(screen.getByRole('button', { name: '连接' }))
+    await screen.findByText('SHA256:test')
+    expect(connectComputer.mock.calls[0]?.[0]).not.toHaveProperty('fingerprint')
+    expect(localStorage.getItem('dsh.workspace.view.v5')).not.toContain('memory-only-test')
+    fireEvent.click(screen.getByRole('button', { name: '信任并安装' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+    expect(connectComputer.mock.calls[1]?.[0]).toMatchObject({ host: '192.0.2.10', fingerprint: 'SHA256:test', password: 'memory-only-test' })
+  })
+
+  it('waits for the initial directory listing before accepting a folder path', async () => {
+    const listing = Promise.withResolvers<{ path: string; entries: { name: string; path: string }[] }>()
+    mount({ useRemoteWorkAvailable: hook(true),
+      useComputers: hook({ phase: 'ready' as const, items: [{ computer, status: 'connected' as const }] }),
+      browseComputer: vi.fn(() => listing.promise),
+    })
+    fireEvent.click(screen.getByRole('button', { name: `在“${computer.name}”中添加文件夹` }))
+    expect(screen.getByLabelText<HTMLInputElement>('远端文件夹路径').disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '添加此文件夹' }).disabled).toBe(true)
+    listing.resolve({ path: 'C:\\work', entries: [] })
+    await waitFor(() => { expect(screen.getByLabelText<HTMLInputElement>('远端文件夹路径').disabled).toBe(false) })
+    expect(screen.getByLabelText<HTMLInputElement>('远端文件夹路径').value).toBe('C:\\work')
+  })
+
+  it('browses and registers a folder on the selected computer', async () => {
+    const addRemoteFolder = vi.fn<WorkspaceBrowserProps['addRemoteFolder']>(async () => {})
+    mount({ addRemoteFolder, useRemoteWorkAvailable: hook(true),
+      useComputers: hook({ phase: 'ready' as const, items: [{ computer, status: 'connected' as const }] }),
+      browseComputer: vi.fn(async () => ({ path: 'C:\\work', entries: [{ name: 'project', path: 'C:\\work\\project' }] })),
+    })
+    fireEvent.click(screen.getByRole('button', { name: `在“${computer.name}”中添加文件夹` }))
+    await screen.findByRole('button', { name: 'project' })
+    fireEvent.click(screen.getByRole('button', { name: '添加此文件夹' }))
+    await waitFor(() => { expect(addRemoteFolder).toHaveBeenCalledWith(computerId, 'C:\\work') })
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+  })
+
   it.each(['workspace', 'flat', 'ungrouped'] as const)('keeps %s recency independent of arrival order and saved manual positions', (mode) => {
     localStorage.clear()
     const preferences = createWorkspaceViewStore().create()
@@ -271,6 +365,7 @@ describe('WorkspaceBrowser', () => {
   it('moves focus into Workspace controls without selecting a Session while a main panel is active', () => {
     const panelInfo = { activePanelId: 'panel-a' as MainPanelId }
     const b = mount({
+      useRemoteWorkAvailable: hook(true),
       usePanelInfo: hook(panelInfo),
       useSessions: hook(sessionState([summary('current', 1)], { main: sid('current') })),
       useWorkspaces: hook(workspaceState([workspace('alpha', ['current'])])),
@@ -282,9 +377,10 @@ describe('WorkspaceBrowser', () => {
     const input = screen.getByPlaceholderText('搜索会话名称')
     expect(document.activeElement).toBe(input)
     fireEvent.click(screen.getByRole('button', { name: '清除搜索' }))
-    const add = screen.getByRole('button', { name: '添加工作区' })
+    const add = screen.getByRole('button', { name: '添加' })
     add.focus()
     fireEvent.click(add)
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加本机文件夹' }))
     expect(document.activeElement).toBe(add)
     expect(screen.getByTestId('directory-flow')).toBeTruthy()
     expect(panelInfo.activePanelId).toBe('panel-a')
@@ -1878,8 +1974,8 @@ describe('WorkspaceBrowser', () => {
   it.each(['clear', 'escape', 'outside'] as const)('animates %s search dismissal without carrying spacing motion through the rail', (dismissal) => {
     vi.useFakeTimers()
     try {
-      const b = mount()
-      const add = screen.getByRole('button', { name: '添加工作区' })
+      const b = mount({ useRemoteWorkAvailable: hook(true) })
+      const add = screen.getByRole('button', { name: '添加' })
       const header = add.closest('[class*="sectionHeader"]')!
       // jsdom observes the motion opt-in; the browser suite measures the resulting transitions.
       const motionEnabled = () => header.className.includes('searchSpacingMotion')
@@ -1901,7 +1997,7 @@ describe('WorkspaceBrowser', () => {
       expect(motionEnabled()).toBe(true)
       expect(input.value).toBe('')
       expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('false')
-      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(screen.getByRole('button', { name: '添加' })).toBe(add)
       expect(add.closest('[class*="sectionHeader"]')).toBe(header)
       rerender(b, { wide: false })
       fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
@@ -1909,20 +2005,21 @@ describe('WorkspaceBrowser', () => {
       expect(motionEnabled()).toBe(false)
       act(() => { vi.advanceTimersByTime(300) })
       expect(document.activeElement).toBe(screen.getByPlaceholderText('搜索会话名称'))
-      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(screen.getByRole('button', { name: '添加' })).toBe(add)
     } finally {
       vi.useRealTimers()
     }
   })
 
   it('preserves the add button and its open directory flow across rail layout changes', () => {
-    const b = mount({ wide: false })
-    const add = screen.getByRole('button', { name: '添加工作区' })
+    const b = mount({ wide: false, useRemoteWorkAvailable: hook(true) })
+    const add = screen.getByRole('button', { name: '添加' })
     fireEvent.click(add)
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加本机文件夹' }))
     const flow = screen.getByTestId('directory-flow')
     for (const wide of [true, false, true]) {
       rerender(b, { wide })
-      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(screen.getByRole('button', { name: '添加' })).toBe(add)
       expect(screen.getByTestId('directory-flow')).toBe(flow)
     }
   })
@@ -2024,25 +2121,26 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
-  it('rail add-workspace raises the directory flow in place, with no menu and no expansion', () => {
+  it('offers local folders and SSH computers from the rail without expanding it', () => {
     const expandSidebar = vi.fn()
-    mount({ wide: false, expandSidebar, useWorkspaces: hook(workspaceState([workspace('alpha', [])])) })
-    fireEvent.click(screen.getByRole('button', { name: '添加工作区' }))
+    mount({ wide: false, expandSidebar, useRemoteWorkAvailable: hook(true), useWorkspaces: hook(workspaceState([workspace('alpha', [])])) })
+    fireEvent.click(screen.getByRole('button', { name: '添加' }))
+    expect(screen.getByRole('menuitem', { name: '通过 SSH 连接电脑' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: '添加本机文件夹' }))
     expect(expandSidebar).not.toHaveBeenCalled()
-    // Adding is the header's only action, so the gesture IS that action: no
-    // one-row popover, and existing workspaces stay in the tree below.
     expect(screen.queryByRole('menu')).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: 'alpha' })).toBeNull()
     expect(screen.getByTestId('directory-flow')).toBeTruthy()
   })
 
-  it('hides the add button when no directory-flow occupant is composed', () => {
+  it('keeps SSH connection available without a local directory picker', () => {
     mount({
+      useRemoteWorkAvailable: hook(true),
       useWorkspaces: hook(workspaceState([workspace('alpha', [])])),
       useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => false, subscribe: () => () => {} }),
     })
-    // Nothing to add with, so the header offers no dead button.
-    expect(screen.queryByRole('button', { name: '添加工作区' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '添加' }))
+    expect(screen.queryByRole('menuitem', { name: '添加本机文件夹' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: '通过 SSH 连接电脑' })).toBeTruthy()
     expect(screen.getByText('alpha')).toBeTruthy()
   })
 
@@ -2060,10 +2158,7 @@ describe('WorkspaceBrowser', () => {
     })
     fireEvent.click(screen.getByText('beta'))
     const source = screen.getByText('tail').closest('[role="treeitem"]') as HTMLElement
-    let targetSection = screen.getByText('beta').closest('[role="treeitem"]')?.parentElement as HTMLElement
-    while (targetSection.parentElement?.getAttribute('role') !== 'tree') {
-      targetSection = targetSection.parentElement as HTMLElement
-    }
+    const targetSection = screen.getByText('beta').closest<HTMLElement>('[class*="groupSection"]')!
     targetSection.getBoundingClientRect = () => ({
       top: 100, bottom: 300, left: 0, right: 200, width: 200, height: 200, x: 0, y: 100, toJSON: () => ({}),
     })
@@ -2074,7 +2169,7 @@ describe('WorkspaceBrowser', () => {
     expect(insertWorkspaceBefore).toHaveBeenCalledWith(wid('tail'), wid('beta'))
   })
 
-  it('draws the first Workspace insertion boundary on the scroll container', () => {
+  it('draws the first folder insertion marker below its computer header', () => {
     mount({
       useWorkspaces: hook(workspaceState([
         workspace('alpha', []),
@@ -2082,18 +2177,14 @@ describe('WorkspaceBrowser', () => {
       ])),
     })
     const source = screen.getByText('beta').closest('[role="treeitem"]') as HTMLElement
-    let firstSection = screen.getByText('alpha').closest('[role="treeitem"]')?.parentElement as HTMLElement
-    while (firstSection.parentElement?.getAttribute('role') !== 'tree') {
-      firstSection = firstSection.parentElement as HTMLElement
-    }
+    const firstSection = screen.getByText('alpha').closest<HTMLElement>('[class*="groupSection"]')!
     firstSection.getBoundingClientRect = () => ({
       top: 100, bottom: 134, left: 0, right: 200, width: 200, height: 34, x: 0, y: 100, toJSON: () => ({}),
     })
     fireEvent.dragStart(source, { dataTransfer: dragData() })
     fireDrag(firstSection, 'dragOver', 105)
-    expect(firstSection.parentElement?.className).toContain('listTopDropActive')
-    const marker = firstSection.parentElement?.previousElementSibling
-    expect(marker?.className).toContain('listTopDropIndicator')
+    expect(firstSection.className).toContain('workspaceDropBefore')
+    expect(within(screen.getByRole('group', { name: '本机' })).getByText('alpha')).toBeTruthy()
   })
 
   it('accepts a document-level drop and commits the last Workspace marker on drag end', () => {
@@ -2107,10 +2198,7 @@ describe('WorkspaceBrowser', () => {
       insertWorkspaceBefore,
     })
     const source = screen.getByText('tail').closest('[role="treeitem"]') as HTMLElement
-    let target = screen.getByText('beta').closest('[role="treeitem"]')?.parentElement as HTMLElement
-    while (target.parentElement?.getAttribute('role') !== 'tree') {
-      target = target.parentElement as HTMLElement
-    }
+    const target = screen.getByText('beta').closest<HTMLElement>('[class*="groupSection"]')!
     target.getBoundingClientRect = () => ({
       top: 100, bottom: 134, left: 0, right: 200, width: 200, height: 34, x: 0, y: 100, toJSON: () => ({}),
     })

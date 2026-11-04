@@ -79,6 +79,11 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'remoteAccess/follow': 'always-allowed', // every Peer reads its own access snapshot before any policy
 
   // ── owner-only ───────────────────────────────────────────────────────────────
+  'remoteWork/browse': 'owner-only',
+  'remoteWork/connectComputer': 'owner-only',
+  'remoteWork/disconnectComputer': 'owner-only',
+  'remoteWork/follow': 'owner-only',
+  'remoteWork/list': 'owner-only',
   // No reader role names these and no plugin offers them today, so the conservative class is
   // owner-only. A plugin that intends to expose one reclassifies it as 'plugin-offered', which still
   // only makes it eligible for the declaration path; the owner's per-share selection is the grant.

@@ -597,6 +597,23 @@ Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/w
 
 ### `workspace/*` events
 
+<a id="workspaceresolve-directory--waterfall"></a>
+
+#### `workspace/resolve-directory` — waterfall
+
+Resolve and validate a directory in its owning execution computer.
+
+```ts cordis-catalog
+/** Resolve and validate a directory in its owning execution computer.
+ * @param path - local absolute path or computer-qualified directory identity.
+ * @param next - delegate to local filesystem validation.
+ * @mode waterfall
+ */
+'workspace/resolve-directory'(path: string, next: () => Promise<string>): Promise<string>
+```
+
+Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
+
 <a id="workspacesession-activity--waterfall"></a>
 
 #### `workspace/session-activity` — waterfall

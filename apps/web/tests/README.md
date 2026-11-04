@@ -32,6 +32,16 @@ Question-composer resize assertions wait for overflow, the clipping mask, and to
 
 [The same-origin terminal case](sidebar-terminal.e2e.ts) waits for the UI-triggered Host close operation before checking process termination. It also checks the first window's process, saved bindings and layout after reload.
 
+## Remote SSH composition
+
+[`remote-work.e2e.ts`](remote-work.e2e.ts) runs the shipped Loader, browser connection and folder dialogs, local Agent, and real remote file and shell providers. Only the external model is scripted. Set `DSH_REMOTE_WORK_HOST`, `DSH_REMOTE_WORK_USERNAME`, `DSH_REMOTE_WORK_FINGERPRINT`, and `DSH_REMOTE_WORK_PLATFORM` (`linux` or `win32`); `DSH_REMOTE_WORK_PORT` defaults to 22. The target needs key-based SSH authentication and the [remote-work prerequisites](../../../packages/ssh/remote-work/README.md#prerequisites-and-authentication). Without a target, this test skips. It creates and removes its own remote workspace and Runtime registration, and compares the recorded computer context with owner-local expected text.
+
+After building, run the selected scenario from the repository root:
+
+```sh
+pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/remote-work.e2e.ts
+```
+
 ## These are Host-face tests
 
 They type-check in the root `tsconfig.host.json`, not in the Client aggregate, because they read Host services directly: `ctx.connection`, the Host `SessionStore`, and `ctx.sessionProjectionCache`. Driving a browser at runtime does not make a file part of the Client program — the two faces merge Cordis `Context` under the same keys with different services, so one program cannot see both. Moving these files into the Client aggregate makes every Host-service access fail to compile.

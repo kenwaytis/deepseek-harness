@@ -719,6 +719,25 @@ turnBoundaryOf(session: Session): TurnBoundaryProjection
 currentInitiator(): Agent | undefined
 
 /**
+ * Bind capability consumers to an Agent's execution environment without moving its loop or model adapter.
+ * The caller registers the returned disposer as an effect and preserves the Session's original execution computer.
+ * @param agent - Agent receiving the execution services.
+ * @param execution - context containing the execution providers; must be ready before registration.
+ * @returns disposer removing only this registration.
+ * @throws when the Agent already has an execution environment.
+ */
+registerExecutionContext(agent: Agent, execution: Context): () => void
+
+/**
+ * Select execution services independently of the Agent's local orchestration services.
+ * @param agent - Agent whose directory identifies its execution computer.
+ * @param localContext - caller's injected services for local Sessions; omitted uses the Agent context.
+ * @returns the registered context, or localContext for an ordinary local directory.
+ * @throws when a computer-qualified directory has no registered provider; never falls back to local execution.
+ */
+executionContext(agent: Agent, localContext: Context = agent.ctx): Context
+
+/**
  * Read the initiating Agent and fail when no initiator boundary is active.
  * Use this for private helpers contractually below a driver, or for a
  * deployment-owned outbound request whose contract forbids agentless calls.

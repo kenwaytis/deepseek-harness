@@ -17,6 +17,9 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { WorkspaceDialogs } from './WorkspaceDialogs.tsx'
+import { ComputerDialog, ComputerHeader, type ComputerAction } from '../computers/Computers.tsx'
+import { remoteDirectoryOf } from '@deepseek-ai/dsh-util-workspace-path'
+import type { ComputerState, RemoteComputer } from '@deepseek-ai/dsh-client-remote-work/client'
 import {
   AnimatedRows, HoverCardGroup, IconArchiveCheckOutlineRegular, IconArchiveOffOutlineRegular, IconArchiveOutlineRegular,
   IconChevronsUpDownOutlineRegular, IconClockOutlineRegular, IconCloseFillRegular,
@@ -139,8 +142,9 @@ function useNativeDragAcceptance(active: boolean): void {
 }
 
 /** Grouping, ordering, and archived-filter menu; own open state so it resets with the wide chrome. */
-function ViewOptionsMenu({ groupBy, orderBy, archivedFilter, onGroupPick, onOrderPick, onArchivedFilterPick, t }: {
+function ViewOptionsMenu({ groupBy, allowGrouping, orderBy, archivedFilter, onGroupPick, onOrderPick, onArchivedFilterPick, t }: {
   groupBy: SessionGroupBy
+  allowGrouping: boolean
   orderBy: SessionOrderBy
   archivedFilter: ArchivedFilter
   onGroupPick: (mode: SessionGroupBy) => void
@@ -154,11 +158,13 @@ function ViewOptionsMenu({ groupBy, orderBy, archivedFilter, onGroupPick, onOrde
       open={open}
       onClose={() => { setOpen(false) }}
       items={[
-        { type: 'label' as const, id: 'group-by', text: t('groupBy.label') },
-        { id: 'workspace', label: t('groupBy.workspace'), icon: <IconFolderCloseRegular /> },
-        { id: 'workspace-tree', label: t('groupBy.workspaceTree'), icon: <IconWorkspaceTreeOutlineRegular /> },
-        { id: 'flat', label: t('groupBy.flat'), icon: <IconFlatListOutlineRegular /> },
-        { type: 'separator' as const, id: 'order-by-separator' },
+        ...allowGrouping ? [
+          { type: 'label' as const, id: 'group-by', text: t('groupBy.label') },
+          { id: 'workspace', label: t('groupBy.workspace'), icon: <IconFolderCloseRegular /> },
+          { id: 'workspace-tree', label: t('groupBy.workspaceTree'), icon: <IconWorkspaceTreeOutlineRegular /> },
+          { id: 'flat', label: t('groupBy.flat'), icon: <IconFlatListOutlineRegular /> },
+          { type: 'separator' as const, id: 'order-by-separator' },
+        ] : [],
         { type: 'label' as const, id: 'order-by', text: t('orderBy.label') },
         { id: 'manual', label: t('orderBy.manual'), icon: <IconChevronsUpDownOutlineRegular /> },
         { id: 'updated', label: t('orderBy.updated'), icon: <IconClockOutlineRegular /> },
@@ -274,6 +280,13 @@ type SessionTreeProps = Pick<
   workspaceReady: boolean
   /** Grouping, ordering, and filter changes replace the view without row motion. */
   animationResetKey: string
+  /** Saved computers and their live transport states. */
+  computers: readonly ComputerState[]
+  localPickerAvailable: boolean
+  remoteAdministration: boolean
+  onAddLocalFolder: () => void
+  onAddRemoteFolder: (computer: RemoteComputer) => void
+  onManageComputer: (computer: RemoteComputer) => void
   /** Nest Workspaces under their nearest registered ancestors. */
   nestWorkspaces: boolean
   /** Explicit persisted group expansion, including descendants in tree mode. */
@@ -319,6 +332,7 @@ function SessionTree({
   renderSlot, openSessionMenu, openWorkspaceMenu, useContextMenuTarget, useContextMenu,
   insertWorkspaceBefore,
   nestWorkspaces, groupExpansion, setGroupExpanded,
+  computers, localPickerAvailable, remoteAdministration, onAddLocalFolder, onAddRemoteFolder, onManageComputer,
   setSessionOrder, home, t,
   revealSessionId, onSessionRevealed, shortcuts,
 }: SessionTreeProps) {
@@ -411,6 +425,10 @@ function SessionTree({
     }
     return false
   }
+  const computerOf = (key: string): string => {
+    const workspace = workspaces.find(candidate => candidate.workspaceId === key)
+    return workspace === undefined ? 'local' : remoteDirectoryOf(workspace.path)?.computerId ?? 'local'
+  }
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
     if (sessionDropCommitted.current) return
@@ -435,7 +453,8 @@ function SessionTree({
     workspaceDropCommitted.current = true
     setWorkspaceDrag(null)
     const owner = parents.get(activeDrag.workspaceId)
-    const siblings = workspaces.filter(workspace => parents.get(workspace.workspaceId) === owner)
+    const siblings = workspaces.filter(workspace => parents.get(workspace.workspaceId) === owner
+      && computerOf(workspace.workspaceId) === computerOf(activeDrag.workspaceId))
     const rowIndex = siblings.findIndex(workspace => workspace.workspaceId === over.id)
     if (rowIndex === -1) return
     const anchor = over.half === 'before' ? over.id : siblings[rowIndex + 1]?.workspaceId
@@ -464,15 +483,12 @@ function SessionTree({
     return children
   }, [groups, parents])
   const rootGroups = childrenByParent.get(undefined) ?? []
-  const workspaceDropAtListStart = rootGroups[0]?.workspaceId !== undefined
-    && workspaceDrag?.over?.id === rootGroups[0].workspaceId
-    && workspaceDrag.over.half === 'before'
-
-  const rowKeys: string[] = groups.length === 0 ? ['empty'] : []
+  const rowKeys: string[] = []
   const renderGroup = (group: GroupNode, depth: number): ReactNode => {
     const workspaceId = group.workspaceId
     const children = childrenByParent.get(group.key) ?? []
     const compatibleDrag = workspaceDrag !== null && parents.get(workspaceDrag.workspaceId) === parents.get(group.key)
+      && computerOf(workspaceDrag.workspaceId) === computerOf(group.key)
     const watermark = sessionWatermarks[group.key] ?? SESSION_WATERMARK_BASE
     const collapsed = watermarkRows(group.sessions, baselines.get(group.key) ?? SESSION_WATERMARK_BASE)
     const visible = watermarkRows(group.sessions, watermark)
@@ -656,21 +672,40 @@ function SessionTree({
     )
   }
 
-  const groupRows = rootGroups.map(group => renderGroup(group, 0))
+  const knownComputerIds = new Set(computers.map(state => String(state.computer.id)))
+  const additionalComputerIds = new Set(workspaces.flatMap((workspace) => {
+    const location = remoteDirectoryOf(workspace.path)
+    return location === undefined || knownComputerIds.has(location.computerId) ? [] : [location.computerId]
+  }))
+  const computerRows: ({ key: string; state: ComputerState | undefined })[] = [
+    { key: 'local', state: undefined }, ...computers.map(state => ({ key: state.computer.id, state })),
+    ...[...additionalComputerIds].map(key => ({ key, state: undefined })),
+  ]
+  const groupRows = computerRows.map(({ key, state }) => {
+    const expansionKey = `computer:${key}`
+    const expanded = groupExpansion[expansionKey] ?? true
+    rowKeys.push(expansionKey)
+    const folders = rootGroups.filter(group => computerOf(group.key) === key)
+    const empty = groups.length === 0 && key === 'local'
+    if (expanded && empty) rowKeys.push('empty')
+    return <div key={key} role="group" aria-label={state?.computer.name ?? t(key === 'local' ? 'computer.local' : 'computer.remoteUnknown')}>
+      <ComputerHeader computer={state} computerId={key === 'local' ? undefined : key} expanded={expanded} t={t}
+        onToggle={() => { setGroupExpanded(expansionKey, !expanded) }}
+        onAdd={key === 'local' ? localPickerAvailable ? onAddLocalFolder : undefined : state !== undefined && remoteAdministration ? () => { onAddRemoteFolder(state.computer) } : undefined}
+        onManage={state !== undefined && remoteAdministration ? () => { onManageComputer(state.computer) } : undefined} />
+      {expanded && <div role="group">{empty && <EmptySessions rowState={rowState} onLeaveArchivedOnly={onLeaveArchivedOnly} t={t} />}{folders.map(group => renderGroup(group, 1))}</div>}
+    </div>
+  })
   return (
     <HoverCardGroup className={clsx(css.treeBody, css.wide)}>
-      {workspaceDropAtListStart && <span className={css.listTopDropIndicator} aria-hidden="true" />}
       <AnimatedRows
-        className={clsx(css.list, workspaceDropAtListStart && css.listTopDropActive)}
+        className={clsx(css.list)}
         role="tree"
         label={t('section.sessions')}
         rowKeys={rowKeys}
         ready={list.phase === 'ready' && workspaceReady && !nativeDragActive}
         resetKey={JSON.stringify([animationResetKey, watermarkMotionKey])}
       >
-        {groups.length === 0 && (
-          <EmptySessions rowState={rowState} onLeaveArchivedOnly={onLeaveArchivedOnly} t={t} />
-        )}
         {groupRows}
       </AnimatedRows>
       <span className={css.fade} />
@@ -921,6 +956,7 @@ export function WorkspaceBrowser({
   searchResultLimit,
   useDirectoryFlow,
   useHostInfo,
+  useComputers, useRemoteWorkAvailable, connectComputer, disconnectComputer, browseComputer, addRemoteFolder,
   useShortcuts,
   useWorkspaceShortcuts,
   requestSearch,
@@ -931,6 +967,13 @@ export function WorkspaceBrowser({
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostInfo(info => info.home)
+  const computers = useComputers(snapshot => snapshot.items)
+  const remoteWorkEnabled = useRemoteWorkAvailable(value => value)
+  const mayConnectComputers = useRemoteAccess('remoteWork/connectComputer')
+  const remoteWorkAvailable = remoteWorkEnabled && mayConnectComputers
+  const computerPhase = useComputers(snapshot => snapshot.phase)
+  const [computerAction, setComputerAction] = useState<ComputerAction | undefined>()
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const shortcuts = useShortcuts(rows => rows)
   const searchShortcut = shortcuts.find(row => row.id === 'session.search')
   const addShortcut = shortcuts.find(row => row.id === 'workspace.add')
@@ -955,7 +998,8 @@ export function WorkspaceBrowser({
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
-  const groupBy = useStore(s => s.groupBy)
+  const storedGroupBy = useStore(s => s.groupBy)
+  const groupBy = remoteWorkEnabled ? 'workspace' : storedGroupBy
   const orderBy = useStore(s => s.orderBy)
   // Persisted view blobs written before the archived filter existed rehydrate
   // without the field; they read as the default hide-archived view.
@@ -1028,13 +1072,14 @@ export function WorkspaceBrowser({
     [FLAT_SESSION_ORDER_KEY, orderedFlatSessionIds] as const,
   ]), [orderedFlatSessionIds, orderedUngroupedSessionIds, orderedWorkspaces])
   useEffect(() => {
-    if (workspacePhase !== 'ready') return
+    if (workspacePhase !== 'ready' || (remoteWorkAvailable && computerPhase !== 'ready')) return
     actions.retainAccountKeys([
       UNGROUPED_KEY,
       FLAT_SESSION_ORDER_KEY,
       ...workspaces.map(workspace => workspace.workspaceId),
+      'computer:local', ...computers.map(state => `computer:${state.computer.id}`),
     ])
-  }, [actions.retainAccountKeys, workspacePhase, workspaces])
+  }, [actions.retainAccountKeys, workspacePhase, workspaces, computers, remoteWorkAvailable, computerPhase])
   useEffect(() => {
     if (list.phase !== 'ready' || workspaceReady || orderBy !== 'manual' || currentBlank === undefined) return
     // A first prompt can end blank pinning before the Workspace baseline arrives.
@@ -1284,6 +1329,7 @@ export function WorkspaceBrowser({
           {wide && (
             <ViewOptionsMenu
               groupBy={groupBy}
+              allowGrouping={!remoteWorkEnabled}
               orderBy={orderBy}
               archivedFilter={archivedFilter}
               onGroupPick={actions.setGroupBy}
@@ -1295,22 +1341,30 @@ export function WorkspaceBrowser({
           {/* Adding is the button's one action, so a composition with no
               picking affordance has nothing to offer here: the region hides the
               button rather than leaving a dead one in the header. */}
-          {directoryFlowAvailable && (
-            <Tooltip label={t('workspace.add')} shortcutKeys={addShortcut?.keys} side="bottom" delayMs={500} portal>
-              <button
-                ref={wsPlusRef}
-                type="button"
-                className={css.iconButton}
-                aria-label={t('workspace.add')}
-                aria-keyshortcuts={addShortcut?.aria}
-                onClick={() => {
-                  requestAddWorkspace()
-                }}
-              >
-                <IconProjectAddOutlineRegular size={wide ? 16 : 18} />
-              </button>
-            </Tooltip>
-          )}
+          {(remoteWorkAvailable || directoryFlowAvailable) && <Menu open={addMenuOpen} onClose={() => { setAddMenuOpen(false) }} portal align="end"
+            items={[
+              ...directoryFlowAvailable ? [{ id: 'local-folder', label: t('computer.addLocalFolder') }] : [],
+              ...remoteWorkAvailable ? [{ id: 'remote-computer', label: t('computer.addRemote') }] : [],
+            ]}
+            onSelect={(id) => {
+              setAddMenuOpen(false)
+              if (id === 'local-folder') requestAddWorkspace()
+              else setComputerAction({ kind: 'connect' })
+            }}
+            anchor={(
+              <Tooltip label={remoteWorkAvailable ? t('computer.add') : t('workspace.add')} shortcutKeys={addShortcut?.keys} side="bottom" delayMs={500} portal>
+                <button
+                  ref={wsPlusRef}
+                  type="button"
+                  className={css.iconButton}
+                  aria-label={remoteWorkAvailable ? t('computer.add') : t('workspace.add')}
+                  aria-keyshortcuts={addShortcut?.aria}
+                  onClick={() => { if (remoteWorkAvailable) setAddMenuOpen(value => !value); else requestAddWorkspace() }}
+                >
+                  <IconProjectAddOutlineRegular size={wide ? 16 : 18} />
+                </button>
+              </Tooltip>
+            )} />}
         </div>
         {/* Add flow + its error dialog (same package — direct composition). */}
         <WorkspacePickFlow
@@ -1409,6 +1463,12 @@ export function WorkspaceBrowser({
                 openWorkspaceMenu={openWorkspaceMenu}
                 useContextMenuTarget={useContextMenuTarget}
                 workspaces={orderedWorkspaces}
+                computers={computers}
+                localPickerAvailable={directoryFlowAvailable}
+                remoteAdministration={remoteWorkAvailable}
+                onAddLocalFolder={requestAddWorkspace}
+                onAddRemoteFolder={(computer) => { setComputerAction({ kind: 'folder', computer }) }}
+                onManageComputer={(computer) => { setComputerAction({ kind: 'connect', computer }) }}
                 ungroupedSessionIds={orderedUngroupedSessionIds}
                 workspaceReady={workspaceReady}
                 nestWorkspaces={groupBy === 'workspace-tree'}
@@ -1429,6 +1489,10 @@ export function WorkspaceBrowser({
             ))}
       </div>
 
+      {computerAction !== undefined && <ComputerDialog action={computerAction} t={t}
+        connectComputer={connectComputer} disconnectComputer={disconnectComputer}
+        browseComputer={browseComputer} addRemoteFolder={addRemoteFolder}
+        onClose={() => { setComputerAction(undefined) }} />}
       {workspaceActionRequest !== null && <WorkspaceDialogs key={`${workspaceActionRequest.action}/${workspaceActionRequest.workspaceId}`}
         request={workspaceActionRequest} workspaces={workspaces} renameWorkspace={renameWorkspace} deleteWorkspace={deleteWorkspace}
         settleWorkspaceAction={settleWorkspaceAction} t={t} />}

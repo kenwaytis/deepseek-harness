@@ -146,6 +146,9 @@ export class LocalFileSystem extends FileSystem {
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
     if (opts?.signal?.aborted) throw new FsError('resolve aborted', 'FS_ABORTED')
+    if ([path, opts?.cwd ?? this.config.cwd].some(value => /^dsh-[a-z][a-z0-9+.-]*:/u.test(value))) {
+      throw new FsError('A computer-qualified path requires its execution filesystem provider', 'FS_IO_ERROR')
+    }
     const local = await resolveLocalTarget(opts?.cwd ?? this.config.cwd, expandHomePrefix(path))
     if (opts?.signal?.aborted) throw new FsError('resolve aborted', 'FS_ABORTED')
     return { targetKey: local.targetKey, displayPath: local.displayPath }
@@ -179,6 +182,9 @@ export class LocalFileSystem extends FileSystem {
   override async lstat(path: string, opts?: { cwd?: string }, signal?: AbortSignal): Promise<FsPathInfo | undefined> {
     if (signal?.aborted) throw new FsError('lstat aborted', 'FS_ABORTED')
     if (path.trim().length === 0) throw new FsError('file_path must be a non-empty string', 'FS_NOT_FOUND')
+    if ([path, opts?.cwd ?? this.config.cwd].some(value => /^dsh-[a-z][a-z0-9+.-]*:/u.test(value))) {
+      throw new FsError('A computer-qualified path requires its execution filesystem provider', 'FS_IO_ERROR')
+    }
     const cwd = opts?.cwd ?? this.config.cwd
     const info = await probeNoFollow(localDisplayPath(cwd, expandHomePrefix(path)))
     if (signal?.aborted) throw new FsError('lstat aborted', 'FS_ABORTED')

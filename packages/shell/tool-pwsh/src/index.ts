@@ -20,13 +20,13 @@
  * @module @deepseek-ai/dsh-tool-pwsh
  */
 
-import { isAbsolute, resolve as resolvePath } from 'node:path'
+import { posix, win32 } from 'node:path'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, ToolRegistrationOptions, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { JobId, JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-shell-env'
@@ -34,7 +34,7 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { ESCALATION_TARGETS, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
-import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { ShellExecutor, ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { parseExitStatus } from '@deepseek-ai/dsh-shell'
 import { processJob, processOutcome, processSources, ringDelta } from './background.ts'
 import { renderPwshJobRead, renderPwshPromoted, renderPwshResult } from './render.ts'
@@ -52,6 +52,8 @@ export const inject = ['tools', 'shell', 'systemPrompt', 'shellEnv', 'workingDir
 /* jscpd:ignore-start -- the pwsh Config mirrors tool-bash's by design, like render/background. */
 /** Configuration for the pwsh tool. */
 export interface Config {
+  /** Admit this tool only for native Windows execution environments. Defaults to false. */
+  nativePlatformOnly?: boolean
   /**
    * Expose `run_in_background` while a job registry is composed (default
    * true); disabled calls are also rejected. Without a registry the tool is
@@ -71,6 +73,7 @@ export interface Config {
 
 /** Runtime configuration schema for the pwsh tool plugin. */
 export const Config: z<Config> = z.object({
+  nativePlatformOnly: z.boolean().default(false),
   enableRunInBackground: z.boolean().default(true),
   promoteOnTimeout: z.boolean().default(true),
 })
@@ -148,11 +151,29 @@ function pwshDescription(windowsSandbox: boolean): string {
     + 'avoid capturing output.'
 }
 
+/** Select command services without moving local Agent orchestration into the execution computer. */
+function executionServices(ctx: Context, agent: ToolExecution['agent']): Context {
+  if (agent === undefined) return ctx
+  const agents = ctx.get('agents')
+  if (agents === undefined) {
+    if (/^dsh-[a-z][a-z0-9+.-]*:/u.test(agent.session.header.cwd ?? '')) throw new Error('The Session execution registry is unavailable')
+    return ctx
+  }
+  return agents.executionContext(agent, ctx)
+}
+
+function executionShell(ctx: Context, exec: ToolExecution): ShellExecutor {
+  const shell = executionServices(ctx, exec.agent).get('shell')
+  if (shell === undefined) throw new Error('The Session command executor is unavailable')
+  return shell
+}
+
 /** Resolve a relative per-call override against the Session's current directory. */
 function resolveWorkdir(modelWorkdir: string | undefined, sessionCwd: string | undefined): string | undefined {
   if (modelWorkdir === undefined) return sessionCwd
-  if (sessionCwd !== undefined && !isAbsolute(modelWorkdir)) {
-    return resolvePath(sessionCwd, modelWorkdir)
+  const paths = sessionCwd !== undefined && (/^[A-Za-z]:[/\\]/u.test(sessionCwd) || sessionCwd.startsWith('\\\\')) ? win32 : posix
+  if (sessionCwd !== undefined && !paths.isAbsolute(modelWorkdir)) {
+    return paths.resolve(sessionCwd, modelWorkdir)
   }
   return modelWorkdir
 }
@@ -210,6 +231,13 @@ const BACKGROUND_OUTPUT_PROPERTIES = {
 
 /* jscpd:ignore-start -- deliberate mirror of dsh-tool-bash's apply() preamble (pwsh-tool-and-executor Agent Note). */
 export function apply(ctx: Context, config: Config = {}): void {
+  const registration: ToolRegistrationOptions = config.nativePlatformOnly === true ? {
+    when: async ({ agent, signal }) => {
+      const subprocess = executionServices(ctx, agent).get('subprocess')
+      if (subprocess === undefined) throw new Error('Native command selection requires the Session subprocess provider')
+      return (await subprocess.terminalEnvironment(signal)).platform === 'windows'
+    },
+  } : {}
   const backgroundEnabled = config.enableRunInBackground ?? true
   // Keeping a timed-out command needs the whole background surface: the job
   // tools to collect and stop it, and the registry itself at execution time.
@@ -264,7 +292,8 @@ export function apply(ctx: Context, config: Config = {}): void {
   ctx.systemPrompt.section({
     name: 'tool:pwsh',
     order: ctx.systemPrompt.getSectionOrder('TOOL_PWSH'),
-    text: 'Non-zero exits are reported as `[exit code: N]` markers; investigate failures before moving on. '
+    text: ({ scope, toolSet }) => config.nativePlatformOnly === true && ctx.tools.get('pwsh', scope, toolSet) === undefined
+      ? '' : 'Non-zero exits are reported as `[exit code: N]` markers; investigate failures before moving on. '
       + 'On Windows a killed process settles as `[exit code: 1]` without a signal marker; treat a bare exit 1 after an interruption as a termination, not a command failure.',
   })
 
@@ -290,7 +319,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         run: () => {
           const hooks = processJob(
             async (signal) => {
-              proc = await ctx.shell.execute({ ...spec, signal })
+              proc = await executionShell(ctx, exec).execute({ ...spec, signal })
               return proc
             },
             started => processOutcome(started, escalationModes),
@@ -528,7 +557,7 @@ export function apply(ctx: Context, config: Config = {}): void {
           }
           // The caller owns cancellation until ctx.jobs commits detached ownership.
           if (exec.signal.aborted) throw toolAborted()
-          const spec = ctx.shell.resolve({ ...request, onExpiry: 'none' })
+          const spec = executionShell(ctx, exec).resolve({ ...request, onExpiry: 'none' })
           return { kind: 'background' as const, jobId: startJob(jobs, args, exec, spec).id, cwd: spec.workdir }
         }
         // A foreground call is a job the tool waits on, so the command is
@@ -537,7 +566,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         // job limit, no controller) runs the command under the deadline kill
         // instead, exactly as a composition without a registry does.
         if (jobs !== undefined && promote) {
-          const spec = ctx.shell.resolve({ ...request, onExpiry: 'none' })
+          const spec = executionShell(ctx, exec).resolve({ ...request, onExpiry: 'none' })
           let attached: StartedJob | undefined
           try {
             attached = startJob(jobs, args, exec, spec)
@@ -546,8 +575,8 @@ export function apply(ctx: Context, config: Config = {}): void {
           }
           if (attached !== undefined) return waitOnJob(jobs, attached, exec, spec)
         }
-        const spec = ctx.shell.resolve({ ...request, signal: exec.signal })
-        const foreground = await ctx.shell.execute(spec)
+        const spec = executionShell(ctx, exec).resolve({ ...request, signal: exec.signal })
+        const foreground = await executionShell(ctx, exec).execute(spec)
         const result = await foreground.result()
         if (result.aborted) throw toolAborted()
         return canonicalPwshResult(result, spec.workdir)
@@ -599,17 +628,17 @@ export function apply(ctx: Context, config: Config = {}): void {
   // foreground-only one returns when the registry unloads while this plugin
   // stays. Both registrations belong to this plugin's own fiber.
   if (!backgroundEnabled) {
-    ctx.tools.register(pwshTool(undefined))
+    ctx.tools.register(pwshTool(undefined), registration)
     return
   }
-  let foregroundOnly = ctx.get('jobs') === undefined ? ctx.tools.register(pwshTool(undefined)) : undefined
+  let foregroundOnly = ctx.get('jobs') === undefined ? ctx.tools.register(pwshTool(undefined), registration) : undefined
   ctx.inject(['jobs'], (jobCtx) => {
     foregroundOnly?.()
     foregroundOnly = undefined
-    const unregister = ctx.tools.register(pwshTool(jobCtx.jobs))
+    const unregister = ctx.tools.register(pwshTool(jobCtx.jobs), registration)
     jobCtx.effect(() => () => {
       unregister()
-      if (ctx.fiber.state === FiberState.ACTIVE) foregroundOnly = ctx.tools.register(pwshTool(undefined))
+      if (ctx.fiber.state === FiberState.ACTIVE) foregroundOnly = ctx.tools.register(pwshTool(undefined), registration)
     })
   })
 }

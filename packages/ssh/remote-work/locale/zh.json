@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "远程工作",
+    "description": "连接 SSH 电脑，让远端文件、命令和终端与本机 Agent 编排分离。"
+  }
+}

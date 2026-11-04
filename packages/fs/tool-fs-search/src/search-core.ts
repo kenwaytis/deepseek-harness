@@ -20,7 +20,7 @@
  */
 
 import { existsSync } from 'node:fs'
-import { isAbsolute, join, parse, relative, sep } from 'node:path'
+import { join, parse, posix, win32 } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { ItemRetainer, TextRetainer } from '@deepseek-ai/dsh-output-retention'
@@ -236,7 +236,14 @@ export async function runRipgrep(
     : await ctx.workingDirectory.ensure(exec.agent, exec.signal)
   let handle: SubprocessHandle
   try {
-    handle = ctx.subprocess.spawn({
+    const agents = ctx.get('agents')
+    if (exec.agent !== undefined && agents === undefined && /^dsh-[a-z][a-z0-9+.-]*:/u.test(exec.agent.session.header.cwd ?? '')) {
+      throw new Error('Computer-qualified Session search requires its Agent execution registry')
+    }
+    const execution = exec.agent !== undefined && agents !== undefined ? agents.executionContext(exec.agent, ctx) : ctx
+    const subprocess = execution.get('subprocess')
+    if (subprocess === undefined) throw new Error('The Session execution provider is unavailable')
+    handle = subprocess.spawn({
       argv: [await resolveRgPath(), '--no-config', ...argv],
       cwd: workdir,
       stdio: {
@@ -287,6 +294,17 @@ export async function runRipgrep(
 }
 
 /**
+ * Select the filesystem's path rules for a computer-qualified Session.
+ * @param exec - execution owner; ordinary local callers retain Host rules.
+ * @param workdir - canonical directory in the execution computer.
+ * @returns the execution platform for Windows or POSIX path operations.
+ */
+export function searchPathPlatform(exec: Pick<ToolExecution, 'agent'>, workdir: string): NodeJS.Platform {
+  if (!/^dsh-[a-z][a-z0-9+.-]*:/u.test(exec.agent?.session.header.cwd ?? '')) return process.platform
+  return /^[A-Za-z]:[/\\]/u.test(workdir) || workdir.startsWith('\\\\') ? 'win32' : 'linux'
+}
+
+/**
  * Map an `rg` output path to its display form: absolute paths inside the
  * resolved workdir become workdir-relative; everything else (relative output,
  * paths outside the workdir) passes through unchanged. Display-only —
@@ -296,13 +314,15 @@ export async function runRipgrep(
  *
  * @param path - one path as ripgrep printed it.
  * @param workdir - the resolved workdir the command ran in.
+ * @param platform - execution OS; omitted preserves the Host's native rules.
  * @returns the workdir-relative display path when possible, else `path` unchanged.
  */
-export function toWorkdirRelative(path: string, workdir: string): string {
-  if (!isAbsolute(path)) return path
-  const rel = relative(workdir, path)
+export function toWorkdirRelative(path: string, workdir: string, platform: NodeJS.Platform = process.platform): string {
+  const paths = platform === 'win32' ? win32 : posix
+  if (!paths.isAbsolute(path)) return path
+  const rel = paths.relative(workdir, path)
   if (rel.length === 0) return '.'
-  if (rel === '..' || rel.startsWith(`..${sep}`)) return path
+  if (rel === '..' || rel.startsWith(`..${paths.sep}`) || paths.isAbsolute(rel)) return path
   return rel
 }
 

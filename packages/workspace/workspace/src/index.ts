@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import { remoteDirectoryOf } from '@deepseek-ai/dsh-util-workspace-path'
 import { mkdir, stat } from 'node:fs/promises'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
@@ -116,6 +117,12 @@ declare module '@deepseek-ai/cordis' {
   }
 
   interface Events {
+    /** Resolve and validate a directory in its owning execution computer.
+     * @param path - local absolute path or computer-qualified directory identity.
+     * @param next - delegate to local filesystem validation.
+     * @mode waterfall
+     */
+    'workspace/resolve-directory'(path: string, next: () => Promise<string>): Promise<string>
     /**
      * Ask the composed providers what still runs for a session before it is
      * archived. A listener prepends its own {@link SessionActivity} entries to
@@ -236,10 +243,12 @@ export class WorkspaceRegistry extends Service {
   // drop the parameter with its @param clause and the `create(path, title?)`
   // lines in this package's README pair.
   async create(path: string, title?: string): Promise<Workspace> {
-    const canonical = await realpathNormalize(path)
-    if (!(await stat(canonical)).isDirectory()) {
-      throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
-    }
+    const canonical = await this.ctx.waterfall('workspace/resolve-directory', path, async () => {
+      if (remoteDirectoryOf(path) !== undefined) throw new Error('No execution provider is mounted for this remote directory')
+      const local = await realpathNormalize(path)
+      if (!(await stat(local)).isDirectory()) throw new Error(`cannot create a workspace at '${local}': path is not a directory`)
+      return local
+    })
     return await this.enqueueOperation(() => this.createCanonical(canonical, title))
   }
 
@@ -814,6 +823,11 @@ export class WorkspaceRegistry extends Service {
     }
     try {
       const path = await realpathNormalize(header.cwd)
+      if (remoteDirectoryOf(path) !== undefined) {
+        this.sessionPaths.set(header.id, path)
+        this.invalidSessionPaths.delete(header.id)
+        return
+      }
       if (!(await stat(path)).isDirectory()) {
         this.invalidSessionPaths.set(header.id, `cwd '${header.cwd}' is not a directory`)
         return

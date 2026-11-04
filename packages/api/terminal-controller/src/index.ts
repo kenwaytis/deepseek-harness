@@ -74,7 +74,7 @@ interface OwnedSession {
 
 /** Typed Remote control of transient Session-owned terminal processes. */
 export class TerminalController extends TypertRemoteService {
-  static inject = ['subprocess', 'sandboxPolicy', 'workingDirectory', 'typert']
+  static inject = ['subprocess', 'sandboxPolicy', 'workingDirectory', 'typert', 'agents']
   static Config: z<Config> = z.object({
     shell: z.union([z.object({
       path: z.string().required(), name: z.string().required(), args: z.array(z.string()).default([]),
@@ -133,7 +133,9 @@ export class TerminalController extends TypertRemoteService {
   @Remote
   shells(agent: Agent, signal: AbortSignal): Promise<TerminalShell[]> {
     signal.throwIfAborted()
-    return discoverShells(this.execution(agent).subprocess, this.config.shell, this.config.shellCandidates, signal)
+    const control = AbortSignal.any([signal, this.lifetime.signal])
+    return this.ctx.agents.withInitiator(agent, () =>
+      discoverShells(this.execution(agent).subprocess, this.config.shell, this.config.shellCandidates, control))
   }
 
   /**
@@ -172,7 +174,8 @@ export class TerminalController extends TypertRemoteService {
       return terminal.info
     }
     if (new Set([...owner.terminals.keys(), ...owner.pending.keys(), ...owner.allocations.keys()]).size >= this.config.maxTerminals) throw new RemoteError('terminal/limit-reached', 'Session terminal limit reached', { limit: this.config.maxTerminals })
-    const allocation = this.spawn(agent, owner, request, AbortSignal.any([signal, this.lifetime.signal, owner.lifetime.signal]))
+    const allocation = this.ctx.agents.withInitiator(agent, () =>
+      this.spawn(agent, owner, request, AbortSignal.any([signal, this.lifetime.signal, owner.lifetime.signal])))
     owner.pending.set(request.id, allocation)
     try {
       const terminal = await allocation
@@ -302,10 +305,11 @@ export class TerminalController extends TypertRemoteService {
 
   private execution(agent: Agent): { subprocess: Context['subprocess']; sandboxPolicy: Context['sandboxPolicy']; workingDirectory: Context['workingDirectory'] } {
     // The Agent context selects execution providers but does not inject consumer services.
-    const subprocess = agent.ctx.get('subprocess')
-    const sandboxPolicy = agent.ctx.get('sandboxPolicy')
+    const execution = this.ctx.agents.executionContext(agent)
+    const subprocess = execution.get('subprocess')
+    const sandboxPolicy = execution.get('sandboxPolicy')
     if (subprocess === undefined || sandboxPolicy === undefined) throw new Error('The Session execution environment requires subprocess and sandbox policy providers')
-    const workingDirectory = agent.ctx.get('workingDirectory')
+    const workingDirectory = execution.get('workingDirectory')
     if (workingDirectory === undefined) throw new Error('The Session execution environment requires a working-directory provider')
     return { subprocess, sandboxPolicy, workingDirectory }
   }

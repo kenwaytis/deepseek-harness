@@ -277,7 +277,7 @@ export interface SettingsControllerInternals {
 
 ## `@deepseek-ai/dsh-api-terminal-controller`
 
-- `inject`: `subprocess` · `sandboxPolicy` · `workingDirectory` · `typert`
+- `inject`: `subprocess` · `sandboxPolicy` · `workingDirectory` · `typert` · `agents`
 - `source`: [`packages/api/terminal-controller/src/index.ts:27`](../packages/api/terminal-controller/src/index.ts)
 
 ```ts config-catalog
@@ -2818,6 +2818,68 @@ export type Config = LocalConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-pwsh-sandbox -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-remote-work -->
+<a id="deepseek-aidsh-remote-work"></a>
+
+## `@deepseek-ai/dsh-remote-work`
+
+- `inject`: `storageDomain` · `agents` · `typert` · `tools` · `systemPrompt` · `sandboxPolicy` · `shell`
+- `refs`: [`LocalFilesystemConfig`](#deepseek-aidsh-fs-sandbox)
+- `source`: [`packages/ssh/remote-work/src/index.ts:40`](../packages/ssh/remote-work/src/index.ts)
+
+```ts config-catalog
+/** Deployment resource limits and local runtime artifacts. */
+export interface Config {
+  /** Local filesystem options retained by the execution router. */
+  readonly localFilesystem?: LocalFilesystemConfig
+  /** Local directory containing the built execution payload. */
+  readonly runtimeDirectory?: string
+  /** Local cache for verified downloads and temporary uploads. */
+  readonly cacheDirectory?: string
+  /** Exact private Node release installed on the remote computer. */
+  readonly nodeVersion?: string
+  /** HTTPS base URL serving Node archives and their checksum manifest. */
+  readonly nodeDistributionUrl?: string
+  /** HTTPS npm registry used for target-specific native dependencies. */
+  readonly nativeRegistryUrl?: string
+  /** Maximum bytes accepted for one downloaded archive. */
+  readonly maxDownloadBytes?: number
+  /** Runtime signature-handshake deadline in milliseconds. */
+  readonly authenticationTimeoutMs?: number
+  /** Maximum simultaneous sockets accepted by one Runtime. */
+  readonly maxConnections?: number
+  /** Milliseconds allowed to confirm an explicit remote stop. */
+  readonly stopTimeoutMs?: number
+  /** Default remote command deadline in milliseconds. */
+  readonly commandTimeoutMs?: number
+  /** Maximum admitted remote command deadline in milliseconds. */
+  readonly maxCommandTimeoutMs?: number
+  /** Deadline in milliseconds for one SSH and installation attempt. */
+  readonly connectTimeoutMs?: number
+  /** Milliseconds between failed reconnect attempts. */
+  readonly reconnectDelayMs?: number
+  /** Milliseconds between SSH liveness probes. */
+  readonly keepaliveIntervalMs?: number
+  /** Unanswered liveness probes allowed before transport failure. */
+  readonly keepaliveMax?: number
+  /** Milliseconds allowed for a new daemon to advertise readiness. */
+  readonly runtimeStartupTimeoutMs?: number
+  /** Milliseconds between remote process-output observations. */
+  readonly pollIntervalMs?: number
+  /** Maximum bytes in one file window or process-output page. */
+  readonly readChunkBytes?: number
+  /** Maximum retained process records; completed records can expire. */
+  readonly maxProcesses?: number
+  /** Retained tail bytes per process output stream. */
+  readonly maxOutputBytes?: number
+  /** Maximum cached mutation results available for recovery. */
+  readonly maxRememberedOperations?: number
+  /** Maximum encoded RPC frame bytes, including result metadata. */
+  readonly maxFrameBytes?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-remote-work -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-repeat-tool-reminder -->
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
@@ -2895,7 +2957,7 @@ export interface Config {
 
 - `inject`: `sessionProjections`
 - `refs`: [`SandboxMode`](subsystems/sandbox.md)
-- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:94`](../packages/sandbox/sandbox-policy/src/index.ts)
+- `source`: [`packages/sandbox/sandbox-policy/src/index.ts:95`](../packages/sandbox/sandbox-policy/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -3316,7 +3378,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-filesystem`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-filesystem/src/index.ts:48`](../packages/skill/skill-filesystem/src/index.ts)
+- `source`: [`packages/skill/skill-filesystem/src/index.ts:55`](../packages/skill/skill-filesystem/src/index.ts)
 
 ```ts config-catalog
 /** Local filesystem skill provider configuration. */
@@ -3944,6 +4006,8 @@ export interface Config {
 ```ts config-catalog
 /** Configuration for the bash tool. */
 export interface Config {
+  /** Admit this tool only for POSIX execution environments. Defaults to false. */
+  nativePlatformOnly?: boolean
   /**
    * Expose `run_in_background` while a job registry is composed (default
    * true); disabled calls are also rejected. Without a registry the tool is
@@ -4182,6 +4246,8 @@ export interface Config {
 ```ts config-catalog
 /** Configuration for the pwsh tool. */
 export interface Config {
+  /** Admit this tool only for native Windows execution environments. Defaults to false. */
+  nativePlatformOnly?: boolean
   /**
    * Expose `run_in_background` while a job registry is composed (default
    * true); disabled calls are also rejected. Without a registry the tool is
@@ -4777,7 +4843,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-working-directory`
 
 - `inject`: `fs` · `sessionProjections` · `systemPrompt`
-- `source`: [`packages/session/working-directory/src/index.ts:51`](../packages/session/working-directory/src/index.ts)
+- `source`: [`packages/session/working-directory/src/index.ts:52`](../packages/session/working-directory/src/index.ts)
 
 ```ts config-catalog
 /** Deployment default for Sessions without an original project directory. */
@@ -4833,6 +4899,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-file-upload` | `agents` · `attachments` · `commands` · `connection` | [`packages/client/file-upload/src/index.ts`](../packages/client/file-upload/src/index.ts) |
 | `@deepseek-ai/dsh-client-locale` | — | [`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts) |
 | `@deepseek-ai/dsh-client-modules` | `loader` | [`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts) |
+| `@deepseek-ai/dsh-client-remote-work` | — | [`packages/client/remote-work/src/index.ts`](../packages/client/remote-work/src/index.ts) |
 | `@deepseek-ai/dsh-client-resources` | — | [`packages/client/resources/src/index.ts`](../packages/client/resources/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-action-cards` | — | [`packages/experimental/client-ui-action-cards/src/index.ts`](../packages/experimental/client-ui-action-cards/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-agent-preset` | — | [`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts) |

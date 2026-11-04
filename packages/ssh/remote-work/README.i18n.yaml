@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/ssh/remote-work/README.md
+/:
+  en: ed81fb5472f4faa5
+  zh: 6d0ad679de929d7c
+/deepseek-ai-dsh-remote-work:
+  en: 3f89db39db91fe30
+  zh: 654bb213f38b2ee1
+/deepseek-ai-dsh-remote-work/summary:
+  en: cfe1fbe80983664e
+  zh: 50b8309377cf2432
+/deepseek-ai-dsh-remote-work/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 3a2f21ff0dc3420d
+/deepseek-ai-dsh-remote-work/use-this-package:
+  en: 82f9796e3214dcb9
+  zh: 26e8d37dee9b2649
+/deepseek-ai-dsh-remote-work/use-this-package/prerequisites-and-authentication:
+  en: c353e2cf81c9acc8
+  zh: 680736f80a22c280
+/deepseek-ai-dsh-remote-work/use-this-package/configuration:
+  en: be03262642e0dee8
+  zh: 86d16483d21ec8ca
+/deepseek-ai-dsh-remote-work/use-this-package/interruption-and-recovery:
+  en: 6423575176f0d2a9
+  zh: f43de4a0f7b787ff
+/deepseek-ai-dsh-remote-work/understand-the-implementation:
+  en: cd2677e3a4076161
+  zh: b40bf21897e7338f
+/deepseek-ai-dsh-remote-work/further-exploration:
+  en: 4fe2bd8bb533233b
+  zh: 089cd8dc35ca1a88
+/deepseek-ai-dsh-remote-work/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-remote-work/model-experience/remote-computer-runtime-context:
+  en: f3cb4dbfaacaaa6a
+  zh: f3f52e5c6da30d1a
+/deepseek-ai-dsh-remote-work/model-experience/remote-computer-runtime-context/what-the-model-sees:
+  en: 9d475c54510b1a4a
+  zh: 56f300079e495bdf
+/deepseek-ai-dsh-remote-work/model-experience/remote-computer-runtime-context/what-the-model-sees/computer-context-template:
+  en: 85b84e09656d6eb8
+  zh: 2f71ffbe5492ae95
+/deepseek-ai-dsh-remote-work/model-experience/remote-computer-runtime-context/token-effect:
+  en: df568f0a0c73d759
+  zh: c211cc691a67b624
+/deepseek-ai-dsh-remote-work/model-experience/remote-computer-runtime-context/kv-cache-effect:
+  en: babe1a61e3a90089
+  zh: b7c8d63ad6b71009
+/deepseek-ai-dsh-remote-work/known-limitations-and-deferred-work:
+  en: ecdce6e2d0f59b2b
+  zh: 213d6730ec252f2f
+/deepseek-ai-dsh-remote-work/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

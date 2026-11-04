@@ -1,6 +1,6 @@
 /** V4 framing with native tool-role admission and released physical rows. */
 
-import { SessionFormatError, isSessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
+import { SessionFormatError, isSessionFormatJsonObject, snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
 import type { SessionFormatCodec, SessionFormatCurrentEncoder, SessionFormatHeader, SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { releasedV2SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v2-to-v3'
 import { assertV4SourceRowAdmission } from './message-sources.ts'
@@ -11,9 +11,22 @@ import { assertV4ForkResult } from './fork-result.ts'
 import { assertV4ToolResultMessage } from './tool-role.ts'
 import { assertReleasedV4Header } from './validation.ts'
 
-function physicalV2(value: unknown): SessionFormatHeader {
-  if (!isSessionFormatJsonObject(value) || value['version'] !== 4) throw new SessionFormatError('expected format v4 physical header')
-  return { ...value, version: 2 } as SessionFormatHeader
+function decodeHeader(value: unknown): SessionFormatHeader {
+  const snapshot = snapshotSessionFormatJson(value, 'format v4 physical header')
+  if (!isSessionFormatJsonObject(snapshot) || snapshot['type'] !== 'session' || snapshot['version'] !== 4) throw new SessionFormatError('expected format v4 physical header')
+  const { type: _type, ...header } = snapshot
+  assertReleasedV4Header(header)
+  const logical = header as SessionFormatHeader
+  const framed = releasedV2SessionFormatCodec.decodeHeader({ type: 'session', ...framingHeader(logical) })
+  return { ...framed, version: 4,
+    ...(logical.cwd?.startsWith('dsh-') === true ? { cwd: logical.cwd } : {}) }
+}
+
+/** Legacy row framing does not interpret V4 execution-directory metadata. */
+function framingHeader(header: SessionFormatHeader): SessionFormatHeader {
+  if (header.cwd?.startsWith('dsh-') !== true) return { ...header, version: 2 }
+  const { cwd: _cwd, ...metadata } = header
+  return { ...metadata, version: 2 }
 }
 
 /**
@@ -22,14 +35,13 @@ function physicalV2(value: unknown): SessionFormatHeader {
  */
 export const releasedV4SessionFormatCodec = Object.freeze({
   version: 4,
-  decodeHeader(value: unknown) {
-    return { ...releasedV2SessionFormatCodec.decodeHeader(physicalV2(value)), version: 4 }
-  },
+  decodeHeader,
   createDecoder(value, recovery) {
-    const decoder = releasedV2SessionFormatCodec.createDecoder(physicalV2(value), recovery)
+    const header = decodeHeader(value)
+    const decoder = releasedV2SessionFormatCodec.createDecoder({ type: 'session', ...framingHeader(header) }, recovery)
     return {
       ...decoder,
-      header: { ...decoder.header, version: 4 },
+      header,
       decodeRow(row, context) {
         assertV4RowAdmission(row)
         decoder.decodeRow(row, {
@@ -41,7 +53,8 @@ export const releasedV4SessionFormatCodec = Object.freeze({
   },
   encodeHeader(header, inheritedEventCount) {
     assertReleasedV4Header(header)
-    return { ...releasedV2SessionFormatCodec.encodeHeader({ ...header, version: 2 }, inheritedEventCount), version: 4 }
+    return { ...releasedV2SessionFormatCodec.encodeHeader(framingHeader(header), inheritedEventCount), version: 4,
+      ...(header.cwd === undefined ? {} : { cwd: header.cwd }) }
   },
   encodeEvent(event: SessionFormatEvent) {
     if (event.type === 'developer/message' && event['ignorable'] === true) {

@@ -1,5 +1,7 @@
 import { IconEditOutlineRegular, IconTrashOutlineRegular, IconPinFillRegular, IconPinOutlineRegular, IconUnarchiveOutlineRegular, IconArchiveOutlineRegular, IconBranchOutlineRegular, IconCopyOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SessionMenu } from './session-actions/SessionMenu.tsx'
+import type { ComputerSnapshot, RemoteComputers } from '@deepseek-ai/dsh-client-remote-work/client'
+import { remoteDirectory } from '@deepseek-ai/dsh-util-workspace-path'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**
  * Workspace plugin, browser half. Two registrations: WorkspaceBrowser fills
@@ -111,6 +113,28 @@ export const inject = ['contextMenus',
  * @param ctx - client root context.
  */
 export function apply(ctx: Context): void {
+  const emptyComputers: ComputerSnapshot = { items: [], phase: 'ready' }
+  let computerProvider: RemoteComputers | undefined
+  const computerListeners = new Set<() => void>()
+  const publishComputers = (): void => { for (const listener of computerListeners) listener() }
+  const computerSource: HostObservable<ComputerSnapshot> = {
+    getSnapshot: () => computerProvider?.source.getSnapshot() ?? emptyComputers,
+    subscribe: (listener) => { computerListeners.add(listener); return () => { computerListeners.delete(listener) } },
+  }
+  const remoteWorkAvailable: HostObservable<boolean> = {
+    getSnapshot: () => computerProvider !== undefined,
+    subscribe: listener => computerSource.subscribe(listener),
+  }
+  ctx.inject(['remoteComputers'], (scope) => {
+    computerProvider = scope.remoteComputers
+    const dispose = computerProvider.source.subscribe(publishComputers)
+    publishComputers()
+    return () => { dispose(); computerProvider = undefined; publishComputers() }
+  })
+  const requireComputers = (): RemoteComputers => {
+    if (computerProvider === undefined) throw new Error('Remote work is not enabled in this profile')
+    return computerProvider
+  }
   const sessions = ctx.get('sessions') as ISessions
   const workspaces = ctx.get('workspaces') as IWorkspaces
   // One viewing-store instance, created here as ui-layout does for its layout
@@ -288,6 +312,14 @@ export function apply(ctx: Context): void {
         run: () => { requestWorkspaceAction(workspaceId, displayTitle, 'delete') } }] : [],
   }), 'workspace: delete menu action')
   const browserInjected = (): WorkspaceBrowserInjected => ({
+    connectComputer: (request, signal) => requireComputers().connect(request, signal),
+    disconnectComputer: id => requireComputers().disconnect(id),
+    browseComputer: (id, path, signal) => requireComputers().browse(id, path, signal),
+    addRemoteFolder: async (id, path) => {
+      const workspace = await workspaces.create({ path: remoteDirectory(id, path) })
+      viewInstance.actions.setGroupExpanded(`computer:${id}`, true)
+      viewInstance.actions.setGroupExpanded(workspace.workspaceId, true)
+    },
     openWorkspaceMenu: (workspaceId, path, displayTitle, point, mode) => {
       const target = ctx.contextMenus.active.getSnapshot()
       if (mode === 'toggle' && target?.kind === 'workspace' && target.value.workspaceId === workspaceId) ctx.contextMenus.close()
@@ -318,8 +350,11 @@ export function apply(ctx: Context): void {
     requestAddWorkspace: shortcutControls.add,
     closeAddWorkspace: shortcutControls.closeAdd,
     setDirectoryBusy: shortcutControls.directoryBusy,
-    hooks: { workspaceActionRequest, contextMenuTarget: ctx.contextMenus.active, directoryFlow: browserFlowSource, hostInfo,
-      workspaceShortcuts: shortcutControls.state, shortcuts: ctx.shortcuts.catalog },
+    hooks: {
+      workspaceActionRequest, contextMenuTarget: ctx.contextMenus.active, directoryFlow: browserFlowSource,
+      hostInfo, computers: computerSource, remoteWorkAvailable,
+      workspaceShortcuts: shortcutControls.state, shortcuts: ctx.shortcuts.catalog,
+    },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => workspaces.create(input),

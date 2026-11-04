@@ -1,0 +1,1 @@
+Files, commands and terminals run on remote computer "SSH composition computer" (Linux). The Agent and model connection run locally. If the connection is interrupted, wait for reconnection; do not repeat an operation whose outcome is unknown.

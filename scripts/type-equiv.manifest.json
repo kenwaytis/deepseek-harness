@@ -2318,6 +2318,36 @@
     },
     {
       "doc": "docs/subsystems/ssh.md",
+      "symbol": "ComputerId",
+      "source": "packages/ssh/remote-work/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
+      "symbol": "RemoteComputer",
+      "source": "packages/ssh/remote-work/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
+      "symbol": "ComputerState",
+      "source": "packages/ssh/remote-work/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
+      "symbol": "ConnectComputerRequest",
+      "source": "packages/ssh/remote-work/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
+      "symbol": "ConnectComputerResult",
+      "source": "packages/ssh/remote-work/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
+      "symbol": "ComputerSnapshot",
+      "source": "packages/client/remote-work/src/client/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/ssh.md",
       "symbol": "HelperLaunch",
       "source": "packages/ssh/ssh/src/index.ts"
     },

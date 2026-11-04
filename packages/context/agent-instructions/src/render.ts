@@ -4,7 +4,9 @@
  * @module @deepseek-ai/dsh-agent-instructions/render
  */
 
-import { basename, dirname, sep } from 'node:path'
+import { posix, win32 } from 'node:path'
+const basename = (path: string) => path.includes('\\') ? win32.basename(path) : posix.basename(path)
+const dirname = (path: string) => path.includes('\\') ? win32.dirname(path) : posix.dirname(path)
 import {
   AGENTS_HOME_ENV,
   DEFAULT_AGENTS_HOME_DISPLAY,
@@ -182,7 +184,7 @@ const RESERVED_SCOPE_DIRECTORIES: ReadonlySet<string> = new Set(USER_GLOBAL_DIRE
 export function escapeProjectDisplayPath(relativePath: string): string {
   const separatorIndex = relativePath.search(/[\\/]/)
   const first = separatorIndex < 0 ? relativePath : relativePath.slice(0, separatorIndex)
-  return RESERVED_SCOPE_DIRECTORIES.has(first) ? `.${sep}${relativePath}` : relativePath
+  return RESERVED_SCOPE_DIRECTORIES.has(first) ? `.${relativePath.includes('\\') ? '\\' : '/'}${relativePath}` : relativePath
 }
 
 const SCOPE_SEPARATOR = '\u0000'

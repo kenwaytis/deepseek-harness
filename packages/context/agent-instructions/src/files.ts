@@ -6,7 +6,15 @@
 
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { posix, win32 } from 'node:path'
+
+// Project directories belong to the filesystem provider's OS, not necessarily the Agent's OS.
+const pathsFor = (path: string) => /^[A-Za-z]:[/\\]/u.test(path) || path.startsWith('\\\\') ? win32 : posix
+const dirname = (path: string) => pathsFor(path).dirname(path)
+const isAbsolute = (path: string) => posix.isAbsolute(path) || win32.isAbsolute(path)
+const join = (base: string, ...parts: string[]) => pathsFor(base).join(base, ...parts)
+const relative = (base: string, path: string) => pathsFor(base).relative(base, path)
+const resolve = (base: string, ...parts: string[]) => pathsFor(base).resolve(base, ...parts)
 import type { FileSystem, FsInfo, FsTarget, FsVersion } from '@deepseek-ai/dsh-fs'
 import { agentsHomeDisplay, dshHomeDisplay } from '@deepseek-ai/dsh-home-paths'
 import { assertNever } from '@deepseek-ai/dsh-util-values'

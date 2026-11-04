@@ -20,10 +20,12 @@
             name: '@deepseek-ai/dsh-time-context'
           - id: tool-bash
             name: '@deepseek-ai/dsh-tool-bash'
-            disabled: !!js process.platform === 'win32'
+            config:
+              nativePlatformOnly: true
           - id: tool-pwsh
             name: '@deepseek-ai/dsh-tool-pwsh'
-            disabled: !!js process.platform !== 'win32'
+            config:
+              nativePlatformOnly: true
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
             config:

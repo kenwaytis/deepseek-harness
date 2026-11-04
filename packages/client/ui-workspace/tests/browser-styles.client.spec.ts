@@ -84,15 +84,13 @@ describe('WorkspaceBrowser.module.css list', () => {
   })
 
   it('draws drag targets as a leading chevron joined to the insertion line', () => {
-    const listTopMarker = declarations('.listTopDropIndicator')
     const workspaceMarker = declarations('.workspaceDropBefore::before')
     const sessionMarker = rowDeclarations('.sessionRow.dropBefore::before')
-    expect(listTopMarker?.get('top')).toBe('-8px')
-    expect(listTopMarker?.get('left')).toBe('0')
+    expect(workspaceMarker?.get('top')).toBe('-8px')
     expect(workspaceMarker?.get('left')).toBe('0')
     expect(sessionMarker?.get('left')).toBe('calc(-1 * var(--dsh-sidebar-paint-inset))')
     expect(sessionMarker?.get('right')).toBe('calc(4px - var(--dsh-sidebar-paint-inset))')
-    for (const marker of [listTopMarker, workspaceMarker, sessionMarker]) {
+    for (const marker of [workspaceMarker, sessionMarker]) {
       expect(marker?.get('height')).toBe('12px')
       expect(marker?.get('background')).not.toContain('radial-gradient')
       expect(marker?.get('background')).toContain('55deg')

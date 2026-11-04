@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/remote-work/README.md
+/:
+  en: 6e304f8ac450eac0
+  zh: eb45a53f0fd00190
+/deepseek-ai-dsh-client-remote-work:
+  en: 6af72c1c03a2baf4
+  zh: a039ce6f28e07544
+/deepseek-ai-dsh-client-remote-work/summary:
+  en: 02630c3761653580
+  zh: 1128c0694ee9ab8e
+/deepseek-ai-dsh-client-remote-work/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 3a2f21ff0dc3420d
+/deepseek-ai-dsh-client-remote-work/use-this-package:
+  en: 4588318fa758a42e
+  zh: 820aa97b739a814a
+/deepseek-ai-dsh-client-remote-work/understand-the-implementation:
+  en: cc13dc5a3595604c
+  zh: 96f92de188337595
+/deepseek-ai-dsh-client-remote-work/further-exploration:
+  en: b1d6ade0bdfa6c12
+  zh: 9157784c8dcac770
+/deepseek-ai-dsh-client-remote-work/model-experience:
+  en: 8b24bb4a0967856c
+  zh: d730034638bee4bc
+/deepseek-ai-dsh-client-remote-work/model-experience/kv-cache-effect:
+  en: cf43d7283f4c4963
+  zh: 34a8ced344f806aa
+/deepseek-ai-dsh-client-remote-work/known-limitations-and-deferred-work:
+  en: 493ff35d42f4acbf
+  zh: 2348f914e947cea8
+/deepseek-ai-dsh-client-remote-work/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

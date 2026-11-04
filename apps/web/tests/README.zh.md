@@ -32,6 +32,16 @@ pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps 
 
 [同源窗口终端用例](sidebar-terminal.e2e.ts)等待 UI 触发的 Host 关闭操作完成后，再检查进程终止。它还检查第一个窗口的进程、保存的绑定以及重载后的布局。
 
+## 远端 SSH 组合
+
+[`remote-work.e2e.ts`](remote-work.e2e.ts)运行内置 Loader、浏览器连接和文件夹对话框、本机 Agent，以及真实的远端文件与 Shell 提供者。只有外部模型使用脚本。设置 `DSH_REMOTE_WORK_HOST`、`DSH_REMOTE_WORK_USERNAME`、`DSH_REMOTE_WORK_FINGERPRINT` 和 `DSH_REMOTE_WORK_PLATFORM`（`linux` 或 `win32`）；`DSH_REMOTE_WORK_PORT` 默认为 22。目标端需要基于密钥的 SSH 认证，并满足[远程工作的前提](../../../packages/ssh/remote-work/README.zh.md#prerequisites-and-authentication)。没有目标时测试跳过。它创建并删除自己拥有的远端工作区与 Runtime 注册，并将已记录的电脑上下文与所属目录中的预期文本比较。
+
+构建完成后，在仓库根目录运行选定场景：
+
+```sh
+pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/remote-work.e2e.ts
+```
+
 ## 这些是 Host 面的测试
 
 它们在根 `tsconfig.host.json` 中做类型检查，而不在 Client aggregate 中，因为它们直接读取 Host 服务：`ctx.connection`、Host 侧 `SessionStore` 与 `ctx.sessionProjectionCache`。运行时驱动浏览器并不使一个文件成为 Client 程序的一部分——两个 face 在相同的键上以不同服务合并 Cordis `Context`，因此单个程序无法同时看见两者。把这些文件挪进 Client aggregate 会让每一处 Host 服务访问都无法编译。

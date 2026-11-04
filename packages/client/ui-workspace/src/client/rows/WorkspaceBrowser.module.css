@@ -479,7 +479,6 @@
   margin-top: 4px;
 }
 
-.listTopDropIndicator,
 .workspaceDropBefore::before,
 .workspaceDropAfter::after {
   content: '';
@@ -505,18 +504,6 @@
       var(--dsw-alias-state-business-primary) 0 0
     ) 4px 5px / calc(100% - 4px) 2px no-repeat;
   pointer-events: none;
-}
-
-/* The first insertion boundary keeps the same -8px coordinate as every
-   Workspace boundary, but lives outside the scrolling clip. */
-.listTopDropIndicator {
-  top: -8px;
-  left: 0;
-  right: var(--dsh-session-list-edge-inset);
-}
-
-.listTopDropActive > .workspaceDropBefore:first-child::before {
-  display: none;
 }
 
 .workspaceDropBefore::before {

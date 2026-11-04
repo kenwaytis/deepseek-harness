@@ -80,6 +80,15 @@ describe('assertReleasedV4Header', () => {
     })) }).not.toThrow()
   })
 
+  it.each([
+    'dsh-ssh://52a77391-e6bc-48e1-b83e-fdced3a30f02/%2Fwork',
+    'dsh-ssh://52a77391-e6bc-48e1-b83e-fdced3a30f02/C%3A%5Cwork',
+  ])('preserves the execution directory %s', (cwd) => {
+    const value = header({ cwd })
+    assertReleasedV4Header(value)
+    expect(value.cwd).toBe(cwd)
+  })
+
   it('refuses malformed headers', () => {
     const malformed: Array<[string, Record<string, unknown>, RegExp]> = [
       ['wrong version', { ...header(), version: 2 }, /expected format v4/],
@@ -88,6 +97,8 @@ describe('assertReleasedV4Header', () => {
       ['non-count delegationDepth', { ...header(), delegationDepth: -1 }, /delegationDepth/],
       ['non-boolean isSeeded', { ...header(), isSeeded: 1 }, /isSeeded must be boolean/],
       ['relative cwd', { ...header(), cwd: 'work' }, /cwd must be absolute/],
+      ['external URI cwd', { ...header(), cwd: 'https://example.test/work' }, /cwd must be absolute/],
+      ['malformed execution URI', { ...header(), cwd: 'dsh-ssh://[' }, /cwd must be absolute/],
       ['non-string parentSession', { ...header(), parentSession: 3 }, /parentSession must be a string/],
       ['non-string agentPreset', { ...header(), agentPreset: 3 }, /agentPreset must be a string/],
       ['invalid origin', { ...header(), origin: 'other' }, /origin must be "subagent"/],

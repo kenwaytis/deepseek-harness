@@ -14,7 +14,7 @@ import { sep } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, SearchResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type { SpillRef } from '@deepseek-ai/dsh-spill'
-import { runRipgrep, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
+import { runRipgrep, searchPathPlatform, toWorkdirRelative, trySaveFormattedResult } from './search-core.ts'
 import { globSearchMeta, searchViewFromMeta } from './presentation.ts'
 import { acceptedDirectCallValue } from './direct-call.ts'
 
@@ -135,23 +135,23 @@ export interface GlobSample {
 }
 
 /** Remove the displayed search-root prefix before choosing a top-level group. */
-function relativeToSearchRoot(path: string, root: string): string {
-  if (root === '.') return path.startsWith(`.${sep}`) ? path.slice(2) : path
+function relativeToSearchRoot(path: string, root: string, pathSeparator: string): string {
+  if (root === '.') return path.startsWith(`.${pathSeparator}`) ? path.slice(2) : path
   let rootEnd = root.length
-  while (rootEnd > 0 && root[rootEnd - 1] === sep) rootEnd -= 1
+  while (rootEnd > 0 && root[rootEnd - 1] === pathSeparator) rootEnd -= 1
   const trimmedRoot = root.slice(0, rootEnd)
-  if (trimmedRoot.length === 0) return stripLeadingSeparators(path)
+  if (trimmedRoot.length === 0) return stripLeadingSeparators(path, pathSeparator)
   if (path === trimmedRoot) return ''
-  if (path.startsWith(`${trimmedRoot}${sep}`)) {
+  if (path.startsWith(`${trimmedRoot}${pathSeparator}`)) {
     return path.slice(trimmedRoot.length + 1)
   }
   return path
 }
 
 /** Strip only separators recognized by the execution platform. */
-function stripLeadingSeparators(path: string): string {
+function stripLeadingSeparators(path: string, pathSeparator: string): string {
   let start = 0
-  while (path[start] === sep) start += 1
+  while (path[start] === pathSeparator) start += 1
   return path.slice(start)
 }
 
@@ -163,9 +163,9 @@ function stripLeadingSeparators(path: string): string {
  * groups by its first real name instead of collapsing every such path into one
  * empty group.
  */
-function topLevelSegment(path: string): string {
-  const trimmed = stripLeadingSeparators(path)
-  const cut = trimmed.indexOf(sep)
+function topLevelSegment(path: string, pathSeparator: string): string {
+  const trimmed = stripLeadingSeparators(path, pathSeparator)
+  const cut = trimmed.indexOf(pathSeparator)
   return cut === -1 ? trimmed : trimmed.slice(0, cut)
 }
 
@@ -180,14 +180,15 @@ function topLevelSegment(path: string): string {
  * @param paths - the complete result, in ripgrep's modification-time order.
  * @param maxItems - how many paths the page may hold; the caller has already established it is smaller than `paths`.
  * @param root - the search root in the same display-path space as `paths`.
+ * @param pathSeparator - separator used by the execution computer; omitted uses the Host separator.
  * @returns the page grouped by top-level entry, with the shown/total top-level spread.
  */
-export function sampleAcrossTopLevel(paths: readonly string[], maxItems: number, root = '.'): GlobSample {
+export function sampleAcrossTopLevel(paths: readonly string[], maxItems: number, root: string = '.', pathSeparator: string = sep): GlobSample {
   type ActiveGroup = { key: string; items: string[]; index: number; current: string }
   const groups = new Map<string, string[]>()
   let active: ActiveGroup[] = []
   for (const path of paths) {
-    const key = topLevelSegment(relativeToSearchRoot(path, root))
+    const key = topLevelSegment(relativeToSearchRoot(path, root, pathSeparator), pathSeparator)
     const group = groups.get(key)
     if (group === undefined) {
       const items = [path]
@@ -243,7 +244,7 @@ function formatGlobPage(items: readonly string[], seen: number, spillRef: SpillR
 }
 
 /** Bound and format one canonical path list for the Native surface relative to its search root. */
-function renderGlobPaths(paths: string[], caps: GlobToolCaps, root: string, spillRef?: SpillRef): string {
+function renderGlobPaths(paths: string[], caps: GlobToolCaps, root: string, spillRef?: SpillRef, pathSeparator: string = sep): string {
   if (paths.length === 0) return 'No files found'
   // A result that fits is shown whole, untouched: modification-time order is the
   // tool's contract, and over a complete result it is what answers age questions.
@@ -251,7 +252,7 @@ function renderGlobPaths(paths: string[], caps: GlobToolCaps, root: string, spil
   if (!caps.sampleOverCapGlobResults) {
     return formatGlobPage(paths.slice(0, caps.maxResults), paths.length, spillRef, '.')
   }
-  return formatGlobOutput(sampleAcrossTopLevel(paths, caps.maxResults, root), paths.length, spillRef)
+  return formatGlobOutput(sampleAcrossTopLevel(paths, caps.maxResults, root, pathSeparator), paths.length, spillRef)
 }
 
 /**
@@ -264,12 +265,15 @@ function renderGlobPaths(paths: string[], caps: GlobToolCaps, root: string, spil
  * @param paths - the complete discovered path list, in modification-time order.
  * @param caps - the resolved glob caps (the inline cap and the sampling switch).
  * @param root - the search root in the same display-path space as `paths`.
+ * @param pathSeparator - separator used by the execution computer; omitted uses the Host separator.
  * @returns the inline page and whether the complete result was capped.
  */
-function globCardPage(paths: string[], caps: GlobToolCaps, root: string): { items: string[]; truncated: boolean } {
+function globCardPage(
+  paths: string[], caps: GlobToolCaps, root: string, pathSeparator: string = sep,
+): { items: string[]; truncated: boolean } {
   if (paths.length <= caps.maxResults) return { items: paths, truncated: false }
   if (!caps.sampleOverCapGlobResults) return { items: paths.slice(0, caps.maxResults), truncated: true }
-  return { items: sampleAcrossTopLevel(paths, caps.maxResults, root).items, truncated: true }
+  return { items: sampleAcrossTopLevel(paths, caps.maxResults, root, pathSeparator).items, truncated: true }
 }
 
 /**
@@ -339,28 +343,31 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
         additionalProperties: false,
         properties: {
           root: { type: 'string', required: true },
+          pathSeparator: { type: 'string', enum: ['/', '\\'] },
           paths: { type: 'array', required: true, items: { type: 'string' } },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: renderGlobPaths(value.paths, caps, value.root) }],
+      render: (_args, value) => [{ type: 'text', text: renderGlobPaths(value.paths, caps, value.root, undefined, value.pathSeparator) }],
       presentationMeta: (_args, value) => {
-        const page = globCardPage(value.paths, caps, value.root)
+        const page = globCardPage(value.paths, caps, value.root, value.pathSeparator)
         return globSearchMeta({ items: page.items, truncated: page.truncated, seen: value.paths.length }, caps.maxMetaBytes)
       },
     },
     async execute(args, exec) {
       const input = parseGlobArgs(args)
       const run = await runRipgrep(ctx, exec, 'glob', buildGlobCommand(input), caps.rawOutputMaxBytes, caps.graceMs, caps.stderrMaxBytes)
-      const root = input.path === undefined ? '.' : toWorkdirRelative(input.path, run.workdir)
-      if (run.noMatches) return { root, paths: [] }
+      const platform = searchPathPlatform(exec, run.workdir)
+      const root = input.path === undefined ? '.' : toWorkdirRelative(input.path, run.workdir, platform)
+      const pathRules = platform === process.platform ? {} : { pathSeparator: platform === 'win32' ? '\\' as const : '/' as const }
+      if (run.noMatches) return { root, paths: [], ...pathRules }
 
       const all: string[] = []
       for (const line of run.stdout.split('\n')) {
         if (line.length === 0) continue
-        const displayPath = toWorkdirRelative(line, run.workdir)
+        const displayPath = toWorkdirRelative(line, run.workdir, platform)
         all.push(displayPath)
       }
-      return { root, paths: all }
+      return { root, paths: all, ...pathRules }
     },
     presentCall: presentGlobCall,
     presentResult: presentGlobResult,
@@ -369,14 +376,15 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
 
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
-    const value = acceptedDirectCallValue(ctx, tool, exec, result, decision) as { root: string; paths: string[] } | undefined
+    const value = acceptedDirectCallValue(ctx, tool, exec, result, decision) as
+      { root: string; paths: string[]; pathSeparator?: string } | undefined
     if (value === undefined) return decision
     const paths = value.paths
     if (paths.length <= caps.maxResults) return decision
     const spillRef = await trySaveFormattedResult(ctx, exec, 'glob-results.txt', paths.join('\n'))
     return {
       kind: 'accept',
-      content: [{ type: 'text', text: renderGlobPaths(paths, caps, value.root, spillRef) }],
+      content: [{ type: 'text', text: renderGlobPaths(paths, caps, value.root, spillRef, value.pathSeparator) }],
       ...decision.additionalContexts !== undefined ? { additionalContexts: decision.additionalContexts } : {},
     }
   })

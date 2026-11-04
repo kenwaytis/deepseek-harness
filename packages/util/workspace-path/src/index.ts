@@ -3,6 +3,8 @@
  * @module @deepseek-ai/dsh-util-workspace-path
  */
 import { sessionFileAddress } from './file-address.ts'
+import { remoteDirectoryOf } from './remote-directory.ts'
+export * from './remote-directory.ts'
 
 /** Whether a path uses a Windows drive or UNC prefix. */
 function isWindowsStylePath(value: string): boolean {
@@ -40,6 +42,7 @@ export function resolveWorkspacePath(cwd: string | undefined, path: string): str
  * @returns `~` or `~/…` for the POSIX home and its descendants, otherwise `path`.
  */
 export function abbreviateHomePath(path: string, home?: string): string {
+  path = remoteDirectoryOf(path)?.path ?? path
   if (home === undefined || home === '') return path
   if (isWindowsStylePath(path) || isWindowsStylePath(home)) return path
   const root = home.replace(/\/+$/, '')
@@ -56,7 +59,7 @@ export function abbreviateHomePath(path: string, home?: string): string {
  * @returns the final segment, or an empty string for a separator-only path.
  */
 export function workspaceTitleOf(path: string): string {
-  const trimmed = path.replace(/[/\\]+$/, '')
+  const trimmed = (remoteDirectoryOf(path)?.path ?? path).replace(/[/\\]+$/, '')
   const separator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
   return trimmed.slice(separator + 1)
 }
@@ -71,6 +74,7 @@ export function workspaceTitleOf(path: string): string {
  * @returns the directory prefix (possibly empty) and the final segment.
  */
 export function pathPartsOf(path: string): { readonly directory: string; readonly name: string } {
+  path = remoteDirectoryOf(path)?.path ?? path
   const trimmed = path.replace(/[/\\]+$/, '')
   if (trimmed === '') return { directory: '', name: path }
   const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\')) + 1

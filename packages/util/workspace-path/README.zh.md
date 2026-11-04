@@ -14,6 +14,7 @@ kind: "package-library"
 ## 目录
 
 - [文件地址](#file-addresses)
+- [带电脑限定的目录](#computer-qualified-directories)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
@@ -27,6 +28,13 @@ kind: "package-library"
 `sessionFileAddress(sessionId, path)` 将 `\` 归一为 `/`，去掉前导 `./`，但保留前导 `/` 字符。id 和每个路径段都做组件编码，`:` 保持字面。`fileAddressFor(sessionId, cwd, path)` 始终构造 Session 地址：`cwd` 内的路径转为相对路径；其他绝对路径（包括 `cwd` 未知时）仍作为该 Session 地址内的绝对路径。`absoluteFileAddress(absolutePath)` 只构造不带 Session 的形式。`parseFileAddress(address)` 检查精确的文件地址前缀、忽略查询与片段后缀、逐段解码，并为 Session 地址返回 `{ scope, sessionId, path }`，为不带 Session 的形式返回 `{ scope, path }`。其他 type 或 scheme、未知作用域、缺 id 或路径，或错误转义都返回 `undefined`。
 
 `fileMediaUrl(base, path)` 从已解码的绝对路径生成带认证文件路由的 URL，支持 HTTP(S) 应用基址与桌面端 `dsh-app://app/` 来源，保留字面量百分号与部署前缀，并拒绝其他应用基址、相对路径、网络路径前缀和控制字符。Markdown 调用方先解码所写 URL；原生文件卡片路径原样传入。
+
+-----
+
+<a id="computer-qualified-directories"></a>
+## 带电脑限定的目录
+
+`remoteDirectory(computerId, path)` 将电脑 UUID 与原生绝对目录编码为 `dsh-ssh://<uuid>/<encoded-path>`。`remoteDirectoryOf()` 只接受规范百分号编码及 POSIX、Windows 盘符或 UNC 绝对路径；其他或格式错误的标识返回 `undefined`。这些辅助函数不连接、不访问文件，也不将远端路径转换为本机路径。[远程工作](../../ssh/remote-work/README.zh.md)负责执行与恢复。
 
 -----
 

@@ -27,6 +27,8 @@ English | [中文](README.zh.md)
 
 New commands start in the Session's current working directory. Relative `workdir` values resolve from that directory; per-call overrides and background jobs do not change it.
 
+The tool uses the Agent's registered execution context when present, not the local orchestration context. `nativePlatformOnly` defaults to `false`; enabling it admits PowerShell only when that Session's subprocess environment is Windows and omits PowerShell guidance from other steps. The shipped Web presets enable it for [remote work](../../ssh/remote-work/README.md).
+
 Load this plugin in any composition where the agent should run PowerShell commands — typically a Windows composition whose `ctx.shell` is backed by a PowerShell executor. It registers the `pwsh` tool once the executor provider and the `dsh-shell-env` registry are mounted.
 
 ### When to choose it

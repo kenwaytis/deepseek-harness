@@ -11,7 +11,14 @@
 
 import { access, lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { unwatchFile, watchFile, type Stats } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { posix, win32 } from 'node:path'
+
+const pathsFor = (path: string) => /^[A-Za-z]:[/\\]/u.test(path) || path.startsWith('\\\\') ? win32 : posix
+const dirname = (path: string) => pathsFor(path).dirname(path)
+const isAbsolute = (path: string) => posix.isAbsolute(path) || win32.isAbsolute(path)
+const join = (base: string, ...parts: string[]) => pathsFor(base).join(base, ...parts)
+const relative = (base: string, path: string) => pathsFor(base).relative(base, path)
+const resolve = (base: string, ...parts: string[]) => pathsFor(base).resolve(base, ...parts)
 import type { Context } from '@deepseek-ai/cordis'
 import chokidar from 'chokidar'
 import z from '@deepseek-ai/schemastery'
@@ -651,7 +658,7 @@ async function resolveRootWatchMode(root: string, followSymlinks: boolean): Prom
           && (await lstat(candidate)).isSymbolicLink()
         const anchor = preserveRootLink ? resolve(candidate) : await canonicalizeWatchPath(candidate)
         if (candidate === root) return { kind: 'root', anchor }
-        const firstSegment = relative(candidate, root).split(sep)[0]
+        const firstSegment = relative(candidate, root).split(pathsFor(candidate).sep)[0]
         /* v8 ignore next -- candidate is a strict ancestor of root. */
         if (firstSegment === undefined || firstSegment.length === 0) return { kind: 'root', anchor }
         return { kind: 'ancestor', anchor, nextPath: join(anchor, firstSegment) }
@@ -704,8 +711,8 @@ function isPotentialSkillPath(root: SkillRoot, path: string): boolean {
 function containedSegments(root: string, path: string): string[] | undefined {
   const child = relative(root, path)
   if (child.length === 0) return []
-  if (child === '..' || child.startsWith(`..${sep}`) || isAbsolute(child)) return undefined
-  return child.split(sep)
+  if (child === '..' || child.startsWith(`..${pathsFor(root).sep}`) || isAbsolute(child)) return undefined
+  return child.split(pathsFor(root).sep)
 }
 
 function mutationToolName(actor: object | undefined): 'edit' | 'write' | undefined {

@@ -28,8 +28,10 @@ export function assertReleasedV4Header(header: unknown): void {
   sessionFormatCount(header.createdAt, 'format v4 header createdAt')
   sessionFormatCount(header.delegationDepth, 'format v4 header delegationDepth')
   if (typeof header.isSeeded !== 'boolean') throw new SessionFormatError('format v4 header isSeeded must be boolean')
-  if (header.cwd !== undefined && (typeof header.cwd !== 'string' || !isAbsolute(header.cwd))) {
-    throw new SessionFormatError('format v4 header cwd must be absolute')
+  if (header.cwd !== undefined) {
+    if (typeof header.cwd !== 'string') throw new SessionFormatError('format v4 header cwd must be absolute or an execution address')
+    const executionUri = /^dsh-[a-z][a-z0-9+.-]*:\/\//u.test(header.cwd) && URL.canParse(header.cwd)
+    if (!isAbsolute(header.cwd) && !executionUri) throw new SessionFormatError('format v4 header cwd must be absolute or an execution address')
   }
   for (const key of ['parentSession', 'agentPreset']) {
     if (header[key] !== undefined && typeof header[key] !== 'string') {

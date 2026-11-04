@@ -1428,4 +1428,25 @@ Awaited parallel durability checkpoint: every listener runs and the caller await
 Types: [Scoped](scope.zh.md)
 
 Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/index.ts)
+
+<a id="session-controller-events"></a>
+
+### `session-controller/*` events
+
+<a id="session-controllerensure-directory--waterfall"></a>
+
+#### `session-controller/ensure-directory` — waterfall
+
+Prepare a project directory in its execution environment before creating a Session.
+
+```ts cordis-catalog
+/** Prepare a project directory in its execution environment before creating a Session.
+ * @param path - original project identity.
+ * @param next - create a local directory when no execution provider handles it.
+ * @mode waterfall
+ */
+'session-controller/ensure-directory'(path: string, next: () => Promise<void>): Promise<void>
+```
+
+Source: [`packages/api/session-controller/src/agent.ts`](../../packages/api/session-controller/src/agent.ts)
 <!-- END GENERATED cordis-surface -->

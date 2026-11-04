@@ -35,6 +35,22 @@ describe('V4 framing and restoration', () => {
     expect(restoreReleasedV4Artifact(artifact, types)).toBe(artifact)
   })
 
+  it.each([
+    'dsh-ssh://52a77391-e6bc-48e1-b83e-fdced3a30f02/%2Fwork',
+    'dsh-ssh://52a77391-e6bc-48e1-b83e-fdced3a30f02/C%3A%5Cwork',
+  ])('round trips an execution directory without changing released V2 admission: %s', (cwd) => {
+    const logical = { ...header, cwd }
+    const physical = releasedV4SessionFormatCodec.encodeHeader(logical, 0)
+    expect(releasedV4SessionFormatCodec.decodeHeader(physical)).toEqual(logical)
+    for (const recovery of ['strict', 'recoverable'] as const) {
+      const decoder = releasedV4SessionFormatCodec.createDecoder(physical, recovery)
+      expect(decoder.header).toEqual(logical)
+      expect(decoder.finish(new SessionFormatEventCollector())).toBe(0)
+      expect(() => releasedV4SessionFormatCodec.createDecoder({ ...physical, cwd: 'https://example.test/work' }, recovery)).toThrow('cwd must be absolute')
+    }
+    expect(() => releasedV2SessionFormatCodec.decodeHeader({ ...physical, version: 2 })).toThrow('cwd must be absolute')
+  })
+
   it('rejects mismatched versions and malformed logical and physical metadata', () => {
     expect(() => { assertReleasedV4Header({ ...header, version: 3 }) }).toThrow('v4 header')
     expect(() => { assertReleasedV4Header({ ...header, createdAt: -1 }) }).toThrow('createdAt')

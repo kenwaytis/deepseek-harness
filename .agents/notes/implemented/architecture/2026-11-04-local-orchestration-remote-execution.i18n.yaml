@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-11-04-local-orchestration-remote-execution.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-04-local-orchestration-remote-execution.md
+/agent-note-local-orchestration-and-reconnectable-remote-execution:
+  en: 835a48a951a40801
+  zh: 57bba8d715306f02
+/agent-note-local-orchestration-and-reconnectable-remote-execution/problem:
+  en: acc88053226ae4fc
+  zh: f86757c7730ff24c
+/agent-note-local-orchestration-and-reconnectable-remote-execution/decision:
+  en: f376964a22109fb2
+  zh: 24acd6caab16f1e0
+/agent-note-local-orchestration-and-reconnectable-remote-execution/decision/authentication-authority:
+  en: 4c8ca7c4460631cd
+  zh: db870e4a146da275
+/agent-note-local-orchestration-and-reconnectable-remote-execution/decision/recovery-ownership:
+  en: 80057f4d7eab3e3e
+  zh: 3e9b26deba307490
+/agent-note-local-orchestration-and-reconnectable-remote-execution/decision/same-version-directory-admission:
+  en: 09bfdc92103f67f8
+  zh: 834383929202b044
+/agent-note-local-orchestration-and-reconnectable-remote-execution/alternatives-considered:
+  en: d239342379509966
+  zh: 5aab70e692aa5e97
+/agent-note-local-orchestration-and-reconnectable-remote-execution/consequences:
+  en: 22625e3e139c9096
+  zh: 6286fe8b70c0e6b3
+/agent-note-local-orchestration-and-reconnectable-remote-execution/verification:
+  en: 823c168ef31c9df0
+  zh: 669e760a80f776d6

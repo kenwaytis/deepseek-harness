@@ -15,9 +15,9 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { isAbsolute, sep } from 'node:path'
+import { posix, win32 } from 'node:path'
 import { defineTool, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, ToolRegistrationOptions, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { JobId, JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-user-approval'
@@ -26,7 +26,7 @@ import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandb
 import { ESCALATION_TARGETS, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
-import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { ShellExecutor, ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { processJob, processOutcome, processSources, ringDelta } from './background.ts'
 import { parseExitStatus, renderJobRead, renderPromoted, renderResult } from './render.ts'
 
@@ -35,6 +35,8 @@ export const inject = ['tools', 'shell', 'systemPrompt', 'shellEnv', 'workingDir
 
 /** Configuration for the bash tool. */
 export interface Config {
+  /** Admit this tool only for POSIX execution environments. Defaults to false. */
+  nativePlatformOnly?: boolean
   /**
    * Expose `run_in_background` while a job registry is composed (default
    * true); disabled calls are also rejected. Without a registry the tool is
@@ -54,6 +56,7 @@ export interface Config {
 
 /** Runtime configuration schema for the bash tool plugin. */
 export const Config: z<Config> = z.object({
+  nativePlatformOnly: z.boolean().default(false),
   enableRunInBackground: z.boolean().default(true),
   promoteOnTimeout: z.boolean().default(true),
 })
@@ -142,11 +145,29 @@ function presentBashResult(args: unknown, result: ToolResult): ToolResultView | 
   return { card: 'terminal', output: body, ...exit }
 }
 
+/** Select command services without moving local Agent orchestration into the execution computer. */
+function executionServices(ctx: Context, agent: ToolExecution['agent']): Context {
+  if (agent === undefined) return ctx
+  const agents = ctx.get('agents')
+  if (agents === undefined) {
+    if (/^dsh-[a-z][a-z0-9+.-]*:/u.test(agent.session.header.cwd ?? '')) throw new Error('The Session execution registry is unavailable')
+    return ctx
+  }
+  return agents.executionContext(agent, ctx)
+}
+
+function executionShell(ctx: Context, exec: ToolExecution): ShellExecutor {
+  const shell = executionServices(ctx, exec.agent).get('shell')
+  if (shell === undefined) throw new Error('The Session command executor is unavailable')
+  return shell
+}
+
 /** Resolve a relative per-call override against the Session's current directory. */
 function resolveWorkdir(modelWorkdir: string | undefined, sessionCwd: string | undefined): string | undefined {
   if (modelWorkdir === undefined) return sessionCwd
-  if (sessionCwd !== undefined && !isAbsolute(modelWorkdir)) {
-    return `${sessionCwd}${sep}${modelWorkdir}`
+  const paths = sessionCwd !== undefined && (/^[A-Za-z]:[/\\]/u.test(sessionCwd) || sessionCwd.startsWith('\\\\')) ? win32 : posix
+  if (sessionCwd !== undefined && !paths.isAbsolute(modelWorkdir)) {
+    return `${sessionCwd}${paths.sep}${modelWorkdir}`
   }
   return modelWorkdir
 }
@@ -200,6 +221,13 @@ const BACKGROUND_OUTPUT_PROPERTIES = {
 } as const
 
 export function apply(ctx: Context, config: Config = {}): void {
+  const registration: ToolRegistrationOptions = config.nativePlatformOnly === true ? {
+    when: async ({ agent, signal }) => {
+      const subprocess = executionServices(ctx, agent).get('subprocess')
+      if (subprocess === undefined) throw new Error('Native command selection requires the Session subprocess provider')
+      return (await subprocess.terminalEnvironment(signal)).platform === 'posix'
+    },
+  } : {}
   const backgroundEnabled = config.enableRunInBackground ?? true
   // Keeping a timed-out command needs the whole background surface: the job
   // tools to collect and stop it, and the registry itself at execution time.
@@ -251,7 +279,8 @@ export function apply(ctx: Context, config: Config = {}): void {
   ctx.systemPrompt.section({
     name: 'tool:bash',
     order: ctx.systemPrompt.getSectionOrder('TOOL_BASH'),
-    text: 'Check the [exit code: N] marker on every bash result; investigate failures before moving on.',
+    text: ({ scope, toolSet }) => config.nativePlatformOnly === true && ctx.tools.get('bash', scope, toolSet) === undefined
+      ? '' : 'Check the [exit code: N] marker on every bash result; investigate failures before moving on.',
   })
 
   /**
@@ -275,7 +304,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         run: () => {
           const hooks = processJob(
             async (signal) => {
-              proc = await ctx.shell.execute({ ...spec, signal })
+              proc = await executionShell(ctx, exec).execute({ ...spec, signal })
               return proc
             },
             started => processOutcome(started, escalationModes),
@@ -505,7 +534,7 @@ export function apply(ctx: Context, config: Config = {}): void {
           }
           // The caller owns cancellation until ctx.jobs commits detached ownership.
           if (exec.signal.aborted) throw toolAborted()
-          const spec = ctx.shell.resolve({ ...request, onExpiry: 'none' })
+          const spec = executionShell(ctx, exec).resolve({ ...request, onExpiry: 'none' })
           return { kind: 'background' as const, jobId: startJob(jobs, args, exec, spec).id, cwd: spec.workdir }
         }
         // A foreground call is a job the tool waits on, so the command is
@@ -514,7 +543,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         // job limit, no controller) runs the command under the deadline kill
         // instead, exactly as a composition without a registry does.
         if (jobs !== undefined && promote) {
-          const spec = ctx.shell.resolve({ ...request, onExpiry: 'none' })
+          const spec = executionShell(ctx, exec).resolve({ ...request, onExpiry: 'none' })
           let attached: StartedJob | undefined
           try {
             attached = startJob(jobs, args, exec, spec)
@@ -523,8 +552,8 @@ export function apply(ctx: Context, config: Config = {}): void {
           }
           if (attached !== undefined) return waitOnJob(jobs, attached, exec, spec)
         }
-        const spec = ctx.shell.resolve({ ...request, signal: exec.signal })
-        const foreground = await ctx.shell.execute(spec)
+        const spec = executionShell(ctx, exec).resolve({ ...request, signal: exec.signal })
+        const foreground = await executionShell(ctx, exec).execute(spec)
         const result = await foreground.result()
         if (result.aborted) throw toolAborted()
         return { kind: 'foreground' as const, ...canonicalBashResult(result, spec.workdir) }
@@ -540,17 +569,17 @@ export function apply(ctx: Context, config: Config = {}): void {
   // foreground-only one returns when the registry unloads while this plugin
   // stays. Both registrations belong to this plugin's own fiber.
   if (!backgroundEnabled) {
-    ctx.tools.register(bashTool(undefined))
+    ctx.tools.register(bashTool(undefined), registration)
     return
   }
-  let foregroundOnly = ctx.get('jobs') === undefined ? ctx.tools.register(bashTool(undefined)) : undefined
+  let foregroundOnly = ctx.get('jobs') === undefined ? ctx.tools.register(bashTool(undefined), registration) : undefined
   ctx.inject(['jobs'], (jobCtx) => {
     foregroundOnly?.()
     foregroundOnly = undefined
-    const unregister = ctx.tools.register(bashTool(jobCtx.jobs))
+    const unregister = ctx.tools.register(bashTool(jobCtx.jobs), registration)
     jobCtx.effect(() => () => {
       unregister()
-      if (ctx.fiber.state === FiberState.ACTIVE) foregroundOnly = ctx.tools.register(bashTool(undefined))
+      if (ctx.fiber.state === FiberState.ACTIVE) foregroundOnly = ctx.tools.register(bashTool(undefined), registration)
     })
   })
 }

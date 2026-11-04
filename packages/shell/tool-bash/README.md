@@ -27,6 +27,8 @@ English | [中文](README.zh.md)
 
 New commands start in the Session's current working directory. Relative `workdir` values resolve from that directory; per-call overrides and background jobs do not change it.
 
+The tool uses the Agent's registered execution context when present, not the local orchestration context. `nativePlatformOnly` defaults to `false`; enabling it admits Bash only when that Session's subprocess environment is POSIX and omits Bash guidance from other steps. The shipped Web presets enable it for [remote work](../../ssh/remote-work/README.md).
+
 Load this plugin in any composition where the agent should run bash commands: it registers the `bash` tool once an executor provider and the `dsh-shell-env` registry are mounted, and stays pending until the `tools`, `shell`, `systemPrompt`, and `shellEnv` services exist.
 
 ### Minimal configuration

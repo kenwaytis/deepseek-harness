@@ -42,6 +42,41 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
 }
 
 describe('AgentRegistry', () => {
+  it('preserves the caller context for local execution and refuses an unbound execution address', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
+    const local = stubAgent('local-execution')
+    const caller = ctx.isolate('fixture-executor')
+    expect(ctx.agents.executionContext(local)).toBe(local.ctx)
+    expect(ctx.agents.executionContext(local, caller)).toBe(caller)
+    const id = SessionId('remote-execution')
+    const remote = stubAgent(id, { session: Session.create(id, [], { ...Session.create(id).header, cwd: 'dsh-ssh://e7250a7e-8bdf-4a6f-942c-cb3e2cdb0b02/%2Fwork' }) })
+    expect(() => ctx.agents.executionContext(remote, caller)).toThrow('execution provider is unavailable')
+  })
+
+  it('unregisters an execution context with its owner and keeps newer registrations safe from stale disposers', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
+    const agent = stubAgent('bound-execution')
+    const execution = ctx.isolate('fixture-executor')
+    const owner = await ctx.plugin((scope: Context) => { scope.effect(() => ctx.agents.registerExecutionContext(agent, execution)) })
+    expect(ctx.agents.executionContext(agent)).toBe(execution)
+    expect(() => ctx.agents.registerExecutionContext(agent, ctx)).toThrow('already registered')
+    await owner.dispose()
+    expect(ctx.agents.executionContext(agent)).toBe(agent.ctx)
+    const first = ctx.agents.registerExecutionContext(agent, execution)
+    first()
+    const second = ctx.agents.registerExecutionContext(agent, execution)
+    first()
+    expect(ctx.agents.executionContext(agent)).toBe(execution)
+    second()
+    expect(ctx.agents.executionContext(agent)).toBe(agent.ctx)
+  })
+
   it('waits for its projection owner and reads turn positions without a loop', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())

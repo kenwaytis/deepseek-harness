@@ -2,7 +2,7 @@
 
 [English](ssh.md) | 中文
 
-[SSH 提供方家族](../../packages/ssh/README.zh.md) 通过部署方持有的 OpenSSH 连接提供一个远端文件系统／进程环境。Harness、模型传输及 Session 存储留在主机。该家族实现既有文件系统、子进程及沙箱 API，不引入 SSH 专用模型工具。
+[SSH 提供者族](../../packages/ssh/README.zh.md)将执行电脑与本机 Harness、模型传输和会话存储分离。显式部署的 POSIX helper 拥有下述连接 API；[远程工作](../../packages/ssh/remote-work/README.zh.md)增加自动部署的 Linux/Windows 电脑及可重连的逐会话执行。两者共享文件系统、子进程和沙箱接口，不新增 SSH 专用模型工具。
 
 ## 执行坐标
 
@@ -27,6 +27,73 @@
 headless 通过已挂载的文件系统提供方记录和检查 Session cwd。因此远端 FS、Bash、终端、LSP 及 PTC 消费方可以共享这些坐标。假定可访问主机文件系统的 Web 工作区视图需要单独集成；仅替换提供方并不会使这些视图支持远端。
 
 替代方案与验证责任见[决策记录](../../.agents/notes/implemented/architecture/2026-09-11-posix-ssh-runtime.zh.md)。
+
+## 远端电脑
+
+远程工作将电脑身份与工作区、会话身份分开存储。带电脑限定的目录保留三者关联，文件和命令路径仍采用执行电脑的原生形式。Host 拥有认证和连接监督，浏览器观察不含凭据或签名密钥的完整电脑快照。[远程工作参考](../../packages/ssh/remote-work/README.zh.md)维护部署与恢复限制；前述传输和租约语义描述单独部署的 POSIX helper。
+
+```ts type-equiv
+/** Stable identity of one saved SSH computer. */
+type ComputerId = Branded<'ComputerId'>
+```
+
+```ts type-equiv
+/** One saved computer; passwords and runtime capabilities are never projected. */
+interface RemoteComputer {
+  readonly id: ComputerId
+  readonly name: string
+  readonly host: string
+  readonly port: number
+  readonly username: string
+  readonly identityFile?: string
+  /** SSH server SHA-256 fingerprint accepted by the operator. */
+  readonly fingerprint: string
+  readonly platform?: 'linux' | 'win32'
+  readonly home?: string
+}
+```
+
+```ts type-equiv
+/** Observable transport state; disconnected does not imply stopped remote processes. */
+interface ComputerState {
+  readonly computer: RemoteComputer
+  readonly status: 'disconnected' | 'connecting' | 'installing' | 'connected' | 'reconnecting' | 'error'
+  readonly error?: string
+}
+```
+
+```ts type-equiv
+/** Connection request; passwords live only in memory for this Host lifetime. */
+interface ConnectComputerRequest {
+  readonly id?: ComputerId
+  readonly name: string
+  readonly host: string
+  readonly port: number
+  readonly username: string
+  readonly identityFile?: string
+  readonly password?: string
+  /** Exact server fingerprint confirmed by the operator; omission probes without installing or authenticating. */
+  readonly fingerprint?: string
+}
+```
+
+```ts type-equiv
+/** A probe requires confirmation before authentication or remote installation. */
+type ConnectComputerResult =
+  | { readonly kind: 'trust-required'; readonly fingerprint: string }
+  | { readonly kind: 'connected'; readonly computer: RemoteComputer }
+```
+
+客户端使用这些完整 Host 快照替换可观察列表，权限撤销时清空列表。
+
+```ts type-equiv
+/** One full Host-authoritative computer projection. */
+interface ComputerSnapshot {
+  readonly items: readonly ComputerState[]
+  readonly phase: 'loading' | 'ready' | 'error'
+  readonly error?: string
+}
+```
 
 ## 连接 API
 
@@ -112,6 +179,87 @@ declare class SshConnection extends Service {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxremotework--remoteworkservice"></a>
+
+### `ctx.remoteWork` — `RemoteWorkService`
+
+Saves computer identities and owns attachments; the remote daemon owns running tasks.
+
+```ts cordis-catalog
+/** Read saved computer identities and connection state.
+ * @returns snapshots without secrets.
+ */
+@Remote list(): ComputerState[]
+
+/**
+ * Probe, confirm and connect one computer. No authentication or installation precedes fingerprint confirmation.
+ * @param request - SSH identity and optional memory-only password.
+ * @param signal - connection/install cancellation.
+ * @returns a fingerprint requiring confirmation, or the connected durable registration.
+ */
+@Remote async connectComputer(request: ConnectComputerRequest, signal: AbortSignal): Promise<ConnectComputerResult>
+
+/** Disconnect local attachments without stopping remote tasks.
+ * @param id - saved computer.
+ */
+@Remote async disconnectComputer(id: ComputerId): Promise<void>
+
+/**
+ * Browse remote directories without moving the Agent or the model connection.
+ * @param id - saved computer.
+ * @param path - absolute remote directory; omission selects that account's home.
+ * @param signal - browse cancellation.
+ * @returns canonical parent and child directories.
+ */
+@Remote async browse( id: ComputerId, path: string | undefined, signal: AbortSignal, ): Promise<{ path: string; entries: { name: string; path: string }[] }>
+
+/** Stream full state after each change, including connection degradation.
+ * @param signal - physical stream lifetime.
+ * @returns complete computer snapshots.
+ */
+@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<ComputerState[]>
+
+/** Select an existing computer or lazily reconnect its saved identity.
+ * @param id - saved computer.
+ * @returns lifecycle-owned attachment.
+ */
+connection(id: ComputerId): RemoteConnection
+
+/** Resolve the initiating Agent's computer.
+ * @param agent - initiating Agent, absent for local administration.
+ * @returns remote attachment, or undefined for local Sessions.
+ */
+connectionFor(agent: Agent | undefined): RemoteConnection | undefined
+
+/** Resolve one computer's filesystem.
+ * @param id - saved computer.
+ * @returns filesystem owned by this plugin.
+ */
+filesystem(id: ComputerId): RemoteFileSystem
+
+/** Read effective directory when available.
+ * @param agent - initiating Agent.
+ * @param fallback - remote root before directory services activate.
+ * @returns current raw remote path.
+ */
+workingDirectory(agent: Agent | undefined, fallback: string): string
+
+/** Pace transport observations.
+ * @param signal - observation cancellation.
+ */
+async waitForPoll(signal: AbortSignal): Promise<void>
+
+/** Retain local observation cleanup, not remote process ownership.
+ * @param close - attachment cleanup awaited at plugin disposal.
+ * @returns release when observation settles.
+ */
+retainAttachment(close: () => Promise<void>): () => void
+```
+
+Types: [Agent](core.zh.md)
+
+Source: [`packages/ssh/remote-work/src/index.ts`](../../packages/ssh/remote-work/src/index.ts)
+
 <a id="ctxssh--sshconnection"></a>
 
 ### `ctx.ssh` — `SshConnection`
@@ -143,4 +291,23 @@ dispose(): Promise<void>
 ```
 
 Source: [`packages/ssh/ssh/src/index.ts`](../../packages/ssh/ssh/src/index.ts)
+
+<a id="remote-work-events"></a>
+
+### `remote-work/*` events
+
+<a id="remote-workchanged--emit"></a>
+
+#### `remote-work/changed` — emit
+
+Remote computer registration or transport state committed.
+
+```ts cordis-catalog
+/** Remote computer registration or transport state committed.
+ * @mode emit
+ */
+'remote-work/changed'(): void
+```
+
+Source: [`packages/ssh/remote-work/src/index.ts`](../../packages/ssh/remote-work/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -34,6 +34,7 @@
  * the row's Session identity; a Session binding would activate and retain
  * every listed Session.
  */
+import type { ComputerId, ComputerSnapshot, ConnectComputerRequest, ConnectComputerResult } from '@deepseek-ai/dsh-client-remote-work/client'
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {
   HostObservable, InjectFace, PropsHooks, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore, SlotHookFactory,
@@ -257,9 +258,20 @@ export type WorkspaceBrowserInjected = {
      * saw. Select the field the surface needs (`info => info.home`).
      */
     hostInfo: HostObservable<RemoteHostFacts>
+    computers: HostObservable<ComputerSnapshot>
+    remoteWorkAvailable: HostObservable<boolean>
     workspaceShortcuts: HostObservable<WorkspaceShortcutState>
     shortcuts: HostObservable<readonly ShortcutCatalogEntry[]>
   }
+  /** Connect after explicit SSH fingerprint confirmation; passwords are not persisted. */
+  connectComputer: (request: ConnectComputerRequest, signal: AbortSignal) => Promise<ConnectComputerResult>
+  /** Disconnect local attachments while retaining remote tasks. */
+  disconnectComputer: (id: ComputerId) => Promise<void>
+  /** List remote directories for the add-folder interaction. */
+  browseComputer: (id: ComputerId, path: string | undefined, signal: AbortSignal) =>
+  Promise<{ path: string; entries: { name: string; path: string }[] }>
+  /** Validate and register a folder on a saved computer. */
+  addRemoteFolder: (id: ComputerId, path: string) => Promise<void>
   /** Open the browser search and focus its input. */
   requestSearch: () => void
   /** Request the existing directory picker. */

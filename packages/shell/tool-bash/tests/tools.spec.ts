@@ -47,7 +47,7 @@ afterAll(() => {
 })
 
 /** Foreground-only harness: no job runtime (backgrounding fails loud here). */
-async function setup() {
+async function setup(config: ToolBash.Config = {}) {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
@@ -59,7 +59,7 @@ async function setup() {
   ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
   await ctx.plugin(BashEnvPlugin)
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000, graceMs: 200 })
-  await ctx.plugin(ToolBash)
+  await ctx.plugin(ToolBash, config)
   return ctx
 }
 
@@ -260,6 +260,24 @@ function sandboxAgent(
 }
 
 describe('bash tool', () => {
+  it.each(['posix', 'windows'] as const)('selects Bash from the Session execution platform %s', async (platform) => {
+    const ctx = await setup({ nativePlatformOnly: true })
+    try {
+      vi.spyOn(ctx.subprocess, 'terminalEnvironment').mockResolvedValue({ platform: 'windows' })
+      const agent = await registerFakeAgent(ctx, 'native-platform')
+      const execution = ctx.isolate('subprocess')
+      await execution.plugin(LocalSubprocessRuntime)
+      vi.spyOn(execution.subprocess, 'terminalEnvironment').mockResolvedValue({ platform })
+      ctx.effect(() => ctx.agents.registerExecutionContext(agent, execution))
+      const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
+      try {
+        expect(ctx.tools.schemas(agent, toolSet).some(tool => tool.name === 'bash')).toBe(platform === 'posix')
+        const prompt = await ctx.systemPrompt.assemble({ scope: agent, toolSet })
+        expect(prompt.sections.some(section => section.name === 'tool:bash' && section.text.length > 0)).toBe(platform === 'posix')
+      } finally { toolSet.dispose() }
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('returns stdout for a successful command', async () => {
     const ctx = await setup()
     const result = await call(ctx, 'bash', { command: 'echo hello', description: 'test command' })

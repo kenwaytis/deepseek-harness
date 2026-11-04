@@ -112,6 +112,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   sandbox: 'sandbox.md',
   sandboxPolicy: 'sandbox.md',
   ssh: 'ssh.md',
+  remoteWork: 'ssh.md',
   sessionPersistence: 'persistence.md',
   sessionQuery: 'session-query.md',
   sessionFileReferences: 'session-reference.md',
@@ -180,6 +181,7 @@ export const SERVICE_PAGE: Record<string, string> = {
  * to a model as `cordis_runtime_inspect what:"client"`).
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  remoteComputers: 'client-side computer snapshot and administration model — packages/client/remote-work/README.md owns the API',
   contextMenus: 'client-side interface-typed menu registry — packages/client/ui-context-menu/README.md owns the API',
   fileActions: 'client-side interface-typed file actions — packages/client/ui-file-actions/README.md owns the API',
   invocation: 'not a service: per-call accessor (RemoteInvocation | undefined) the Gateway derives for each Remote call — packages/api/gateway/README.md owns the contract',
@@ -240,6 +242,8 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'agent-loop': 'core.md',
   'agent-preset': 'core.md',
   'api-session': 'session.md',
+  'session-controller': 'session.md',
+  'remote-work': 'ssh.md',
   'approval': 'approval.md',
   'commands': 'commands.md',
   'connection': 'web-server.md',
@@ -683,6 +687,12 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SandboxPolicyRequest: 'sandbox.md',
   SshConnection: 'ssh.md',
   SshStreamEndpoint: 'ssh.md',
+  ComputerId: 'ssh.md',
+  RemoteComputer: 'ssh.md',
+  ComputerState: 'ssh.md',
+  ConnectComputerRequest: 'ssh.md',
+  ConnectComputerResult: 'ssh.md',
+  ComputerSnapshot: 'ssh.md',
   ScopeKey: 'scope.md',
   Scoped: 'scope.md',
   EpochHeader: 'session.md',
@@ -991,6 +1001,8 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  RemoteConnection: 'Runtime attachment implementation is owned by packages/ssh/remote-work/README.md and src/connection.ts.',
+  RemoteFileSystem: 'Computer-bound provider implementation is owned by packages/ssh/remote-work/README.md and src/filesystem.ts.',
   ActionCardDecision: 'packages/experimental/action-cards/README.md',
   ActionCardKind: 'packages/experimental/action-cards/README.md',
   ActionCardResult: 'packages/experimental/action-cards/README.md',

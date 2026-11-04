@@ -113,7 +113,8 @@ function validateSessionHeader(id: SessionId, input: unknown): SessionHeader {
   }
   if (record.cwd !== undefined) {
     if (typeof record.cwd !== 'string') throw new Error('session header cwd must be a string')
-    if (!isAbsolute(record.cwd)) {
+    const executionUri = /^dsh-[a-z][a-z0-9+.-]*:\/\//u.test(record.cwd) && URL.canParse(record.cwd)
+    if (!isAbsolute(record.cwd) && !executionUri) {
       throw new Error(`session header cwd must be an absolute path, got "${record.cwd}"`)
     }
   }

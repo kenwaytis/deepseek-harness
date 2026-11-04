@@ -62,4 +62,4 @@ SSH 提供经过认证的字节通道及逐通道流量控制，但普通 exec �
 
 ## 延后工作
 
-持久远端重连需要独立的操作身份与恢复设计，不能在断连后复用活跃回调句柄。更广泛的 Web 支持需要由提供方负责的工作区资源。更强的资源计量或修订后的 PTC yield/wait 与超时策略属于 [Node 运行时参考](../../../../packages/ptc-runtime/ptc-runtime-node/README.zh.md)，不属于 SSH 管理请求截止时限。
+[远程工作](2026-11-04-local-orchestration-remote-execution.zh.md)拥有独立的操作身份、恢复与 GUI 工作区设计；本提供者族保留按连接清理，不在断连后复用活跃回调句柄。更强的资源计量或修订后的 PTC yield/wait 与超时策略属于 [Node 运行时参考](../../../../packages/ptc-runtime/ptc-runtime-node/README.zh.md)，不属于 SSH 管理请求截止时限。

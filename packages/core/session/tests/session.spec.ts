@@ -1483,6 +1483,17 @@ describe('SessionStore', () => {
     }
   })
 
+  it.each([
+    'dsh-ssh://52a77391-e6bc-48e1-b83e-fdced3a30f02/%2Fwork',
+    'dsh-ssh://52a77391-e6bc-48e1-b83e-fdced3a30f02/C%3A%5Cwork',
+  ])('retains the execution directory in a creation header: %s', async (cwd) => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const session = ctx.sessions.create(SessionId('execution-directory'), { meta: { cwd } })
+    expect(session.header.cwd).toBe(cwd)
+    await ctx.fiber.dispose()
+  })
+
   it('rejects a non-absolute meta.cwd', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

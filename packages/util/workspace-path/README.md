@@ -14,6 +14,7 @@ Browser-safe path helpers shared by Workspace-facing client and controller packa
 ## Table of Contents
 
 - [File addresses](#file-addresses)
+- [Computer-qualified directories](#computer-qualified-directories)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
@@ -27,6 +28,13 @@ A resource address is `dsh-resource://<type>/…`, and the type — the URI host
 `sessionFileAddress(sessionId, path)` normalizes `\` to `/` and drops leading `./`, but preserves leading `/` characters. Every id and path segment is component-encoded with `:` kept literal. `fileAddressFor(sessionId, cwd, path)` always builds a Session address: paths inside `cwd` become relative; other absolute paths, including when `cwd` is unknown, stay absolute within that Session address. `absoluteFileAddress(absolutePath)` builds only the Session-less form. `parseFileAddress(address)` checks the exact file-address prefix, ignores query and fragment suffixes, decodes each segment, and returns `{ scope, sessionId, path }` for a Session address or `{ scope, path }` for the Session-less form. Another type or scheme, an unknown scope, a missing id or path, or a malformed escape returns `undefined`.
 
 `fileMediaUrl(base, path)` builds an authenticated file-route URL from an already-decoded absolute path. It accepts HTTP(S) application bases and the Desktop `dsh-app://app/` origin, preserves literal percent signs and deployment prefixes, and rejects other application bases, relative paths, network-path prefixes, and control characters. Markdown owners decode authored URLs before calling it; native file-card paths are passed unchanged.
+
+-----
+
+<a id="computer-qualified-directories"></a>
+## Computer-qualified directories
+
+`remoteDirectory(computerId, path)` encodes a computer UUID and native absolute directory as `dsh-ssh://<uuid>/<encoded-path>`. `remoteDirectoryOf()` accepts only canonical percent encoding and POSIX, Windows-drive, or UNC absolute paths; it returns `undefined` for other or malformed identities. These helpers do not connect, access files, or turn a remote path into a local one. [Remote work](../../ssh/remote-work/README.md) owns execution and recovery.
 
 -----
 

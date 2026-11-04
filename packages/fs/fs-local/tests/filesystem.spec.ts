@@ -86,6 +86,14 @@ describe('registration', () => {
 })
 
 describe('resolve', () => {
+  it('refuses execution directory URIs instead of resolving them into local paths', async () => {
+    const uri = 'dsh-ssh://e7250a7e-8bdf-4a6f-942c-cb3e2cdb0b02/%2Fwork'
+    await expect(fs.resolve(uri)).rejects.toMatchObject({ code: 'FS_IO_ERROR' })
+    await expect(fs.resolve('file.txt', { cwd: uri })).rejects.toMatchObject({ code: 'FS_IO_ERROR' })
+    await expect(fs.lstat(uri)).rejects.toMatchObject({ code: 'FS_IO_ERROR' })
+    await expect(fs.lstat('file.txt', { cwd: uri })).rejects.toMatchObject({ code: 'FS_IO_ERROR' })
+  })
+
   it('resolves a relative path against opts.cwd, not config.cwd', async () => {
     // config.cwd is `dir`; a call supplying a DIFFERENT cwd bases the relative
     // path there (the per-session workspace mapping — mirrors tool-bash workdir).

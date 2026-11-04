@@ -278,6 +278,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when this service instance has been disposed.'],
       },
       {
+        signature: 'registerExecutionContext(agent: Agent, execution: Context): () => void',
+        description: 'Bind capability consumers to an Agent\'s execution environment without moving its loop or model adapter. The caller registers the returned disposer as an effect and preserves the Session\'s original execution computer.',
+        parameters: [{ name: 'agent', description: 'Agent receiving the execution services.' }, { name: 'execution', description: 'context containing the execution providers; must be ready before registration.' }],
+        returns: 'disposer removing only this registration.',
+        throws: ['when the Agent already has an execution environment.'],
+      },
+      {
+        signature: 'executionContext(agent: Agent, localContext: Context = agent.ctx): Context',
+        description: 'Select execution services independently of the Agent\'s local orchestration services.',
+        parameters: [{ name: 'agent', description: 'Agent whose directory identifies its execution computer.' }, { name: 'localContext', description: 'caller\'s injected services for local Sessions; omitted uses the Agent context.' }],
+        returns: 'the registered context, or localContext for an ordinary local directory.',
+        throws: ['when a computer-qualified directory has no registered provider; never falls back to local execution.'],
+      },
+      {
         signature: 'requireInitiator(): Agent',
         description: 'Read the initiating Agent and fail when no initiator boundary is active. Use this for private helpers contractually below a driver, or for a deployment-owned outbound request whose contract forbids agentless calls. Generic or direct-call paths use optional lookup or explicit request fields.',
         parameters: [],
@@ -2553,6 +2567,77 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Stream the calling Peer\'s access snapshot: one baseline, then `upsert` and `remove` frames after each `invalidate()` and each policy registration or removal that changes a grant. The owner receives only `{ owner: true }`. The generation ends when `signal` aborts or this service unloads, so a reloaded service starts every reader from a fresh baseline.',
         parameters: [{ name: 'signal', description: 'generation cancellation.' }],
         returns: 'the access frames of one generation.',
+      },
+    ],
+  },
+  {
+    key: 'remoteWork',
+    summary: 'Saves computer identities and owns attachments; the remote daemon owns running tasks.',
+    description: 'Saves computer identities and owns attachments; the remote daemon owns running tasks.',
+    methods: [
+      {
+        signature: '@Remote list(): ComputerState[]',
+        description: 'Read saved computer identities and connection state.',
+        parameters: [],
+        returns: 'snapshots without secrets.',
+      },
+      {
+        signature: '@Remote async connectComputer(request: ConnectComputerRequest, signal: AbortSignal): Promise<ConnectComputerResult>',
+        description: 'Probe, confirm and connect one computer. No authentication or installation precedes fingerprint confirmation.',
+        parameters: [{ name: 'request', description: 'SSH identity and optional memory-only password.' }, { name: 'signal', description: 'connection/install cancellation.' }],
+        returns: 'a fingerprint requiring confirmation, or the connected durable registration.',
+      },
+      {
+        signature: '@Remote async disconnectComputer(id: ComputerId): Promise<void>',
+        description: 'Disconnect local attachments without stopping remote tasks.',
+        parameters: [{ name: 'id', description: 'saved computer.' }],
+      },
+      {
+        signature: '@Remote async browse( id: ComputerId, path: string | undefined, signal: AbortSignal, ): Promise<{ path: string; entries: { name: string; path: string }[] }>',
+        description: 'Browse remote directories without moving the Agent or the model connection.',
+        parameters: [{ name: 'id', description: 'saved computer.' }, { name: 'path', description: 'absolute remote directory; omission selects that account\'s home.' }, { name: 'signal', description: 'browse cancellation.' }],
+        returns: 'canonical parent and child directories.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<ComputerState[]>',
+        description: 'Stream full state after each change, including connection degradation.',
+        parameters: [{ name: 'signal', description: 'physical stream lifetime.' }],
+        returns: 'complete computer snapshots.',
+      },
+      {
+        signature: 'connection(id: ComputerId): RemoteConnection',
+        description: 'Select an existing computer or lazily reconnect its saved identity.',
+        parameters: [{ name: 'id', description: 'saved computer.' }],
+        returns: 'lifecycle-owned attachment.',
+      },
+      {
+        signature: 'connectionFor(agent: Agent | undefined): RemoteConnection | undefined',
+        description: 'Resolve the initiating Agent\'s computer.',
+        parameters: [{ name: 'agent', description: 'initiating Agent, absent for local administration.' }],
+        returns: 'remote attachment, or undefined for local Sessions.',
+      },
+      {
+        signature: 'filesystem(id: ComputerId): RemoteFileSystem',
+        description: 'Resolve one computer\'s filesystem.',
+        parameters: [{ name: 'id', description: 'saved computer.' }],
+        returns: 'filesystem owned by this plugin.',
+      },
+      {
+        signature: 'workingDirectory(agent: Agent | undefined, fallback: string): string',
+        description: 'Read effective directory when available.',
+        parameters: [{ name: 'agent', description: 'initiating Agent.' }, { name: 'fallback', description: 'remote root before directory services activate.' }],
+        returns: 'current raw remote path.',
+      },
+      {
+        signature: 'async waitForPoll(signal: AbortSignal): Promise<void>',
+        description: 'Pace transport observations.',
+        parameters: [{ name: 'signal', description: 'observation cancellation.' }],
+      },
+      {
+        signature: 'retainAttachment(close: () => Promise<void>): () => void',
+        description: 'Retain local observation cleanup, not remote process ownership.',
+        parameters: [{ name: 'close', description: 'attachment cleanup awaited at plugin disposal.' }],
+        returns: 'release when observation settles.',
       },
     ],
   },
@@ -5173,6 +5258,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'remote-work/changed',
+    mode: 'emit',
+    signature: '\'remote-work/changed\'(): void',
+    summary: 'Remote computer registration or transport state committed.',
+    description: 'Remote computer registration or transport state committed.',
+    parameters: [],
+  },
+  {
     name: 'schedule/changed',
     mode: 'emit',
     signature: '\'schedule/changed\'(): void',
@@ -5187,6 +5280,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Restore a reminder\'s Session through its embedding\'s owning controller.',
     description: 'Restore a reminder\'s Session through its embedding\'s owning controller. Call next() to use the Web Session controller.',
     parameters: [{ name: 'sessionId', description: 'Original Session receiving the reminder.' }],
+  },
+  {
+    name: 'session-controller/ensure-directory',
+    mode: 'waterfall',
+    signature: '\'session-controller/ensure-directory\'(path: string, next: () => Promise<void>): Promise<void>',
+    summary: 'Prepare a project directory in its execution environment before creating a Session.',
+    description: 'Prepare a project directory in its execution environment before creating a Session.',
+    parameters: [{ name: 'path', description: 'original project identity.' }, { name: 'next', description: 'create a local directory when no execution provider handles it.' }],
   },
   {
     name: 'session-telemetry/record',
@@ -5403,6 +5504,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A workflow run started — the script\'s meta block validated, the body about to execute.',
     description: 'A workflow run started — the script\'s meta block validated, the body about to execute. Paired with Events[\'workflow/end\'].',
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
+  },
+  {
+    name: 'workspace/resolve-directory',
+    mode: 'waterfall',
+    signature: '\'workspace/resolve-directory\'(path: string, next: () => Promise<string>): Promise<string>',
+    summary: 'Resolve and validate a directory in its owning execution computer.',
+    description: 'Resolve and validate a directory in its owning execution computer.',
+    parameters: [{ name: 'path', description: 'local absolute path or computer-qualified directory identity.' }, { name: 'next', description: 'delegate to local filesystem validation.' }],
   },
   {
     name: 'workspace/session-activity',
@@ -5949,6 +6058,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type CompositionRowEnablement = boolean | \'conditional\';',
   },
   {
+    name: 'ComputerId',
+    declaration: 'export type ComputerId = Branded<\'ComputerId\'>;',
+  },
+  {
+    name: 'ComputerState',
+    declaration: 'export interface ComputerState {\n    readonly computer: RemoteComputer;\n    readonly status: \'disconnected\' | \'connecting\' | \'installing\' | \'connected\' | \'reconnecting\' | \'error\';\n    readonly error?: string;\n}',
+  },
+  {
     name: 'ComputerUseProviderName',
     declaration: 'export type ComputerUseProviderName = Branded<\'ComputerUseProviderName\'>;',
   },
@@ -5963,6 +6080,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ConfinedSandboxMode',
     declaration: 'export type ConfinedSandboxMode = Exclude<SandboxMode, \'danger-full-access\'>;',
+  },
+  {
+    name: 'ConnectComputerRequest',
+    declaration: 'export interface ConnectComputerRequest {\n    readonly id?: ComputerId;\n    readonly name: string;\n    readonly host: string;\n    readonly port: number;\n    readonly username: string;\n    readonly identityFile?: string;\n    readonly password?: string;\n    readonly fingerprint?: string;\n}',
+  },
+  {
+    name: 'ConnectComputerResult',
+    declaration: 'export type ConnectComputerResult = {\n    readonly kind: \'trust-required\';\n    readonly fingerprint: string;\n} | {\n    readonly kind: \'connected\';\n    readonly computer: RemoteComputer;\n};',
   },
   {
     name: 'ConnectionAdmission',
@@ -6413,6 +6538,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface FileReferenceCandidate {\n    path: string;\n    kind: \'file\' | \'directory\';\n}',
   },
   {
+    name: 'FileSystem',
+    declaration: 'export abstract class FileSystem extends Service {\n    constructor(ctx: Context);\n    watch(target: FsTarget, changed: (error?: Error) => void, signal: AbortSignal): Promise<() => Promise<void>>;\n    get sandboxMode(): SandboxMode | undefined;\n    abstract resolve(path: string, opts?: {\n        cwd?: string;\n        signal?: AbortSignal;\n    }): Promise<FsTarget>;\n    abstract processPath(target: FsTarget): string;\n    processPathFromHostPath(hostPath: string): string | undefined;\n    abstract fileUrl(target: FsTarget): string;\n    abstract contains(parent: FsTarget, child: FsTarget): boolean;\n    abstract stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined>;\n    abstract lstat(path: string, opts?: {\n        cwd?: string;\n    }, signal?: AbortSignal): Promise<FsPathInfo | undefined>;\n    abstract readText(target: FsTarget, signal?: AbortSignal): Promise<string>;\n    abstract streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>>;\n    abstract readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>;\n    abstract readByteRange(target: FsTarget, range: {\n        offset: number;\n        length: number;\n    }, signal?: AbortSignal): Promise<Uint8Array>;\n    abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>;\n    abstract writeText(target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy): Promise< /* …truncated — full shape in source */',
+  },
+  {
     name: 'FileUploadReceiptId',
     declaration: 'export type FileUploadReceiptId = Branded<\'file-upload-receipt-id\'>;',
   },
@@ -6767,6 +6896,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'InstallBundleOptions',
     declaration: 'export interface InstallBundleOptions {\n    enabled?: boolean;\n    saveExact?: boolean;\n    requestId?: PluginInstallRequestId;\n    approvedBuilds?: string[];\n    registry?: Registry;\n}',
+  },
+  {
+    name: 'InstallConfig',
+    declaration: 'export interface InstallConfig {\n    readonly cacheDirectory: string;\n    readonly runtimeDirectory: string;\n    readonly nodeVersion: string;\n    readonly nodeDistributionUrl: string;\n    readonly nativeRegistryUrl: string;\n    readonly maxDownloadBytes: number;\n    readonly maxProcesses: number;\n    readonly maxOutputBytes: number;\n    readonly readChunkBytes: number;\n    readonly maxRememberedOperations: number;\n    readonly maxFrameBytes: number;\n    readonly authenticationTimeoutMs: number;\n    readonly maxConnections: number;\n    readonly keepaliveIntervalMs: number;\n    readonly keepaliveMax: number;\n    readonly runtimeStartupTimeoutMs: number;\n    readonly pollIntervalMs: number;\n}',
   },
   {
     name: 'InstallSpecKind',
@@ -7901,6 +8034,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteAccessRole<K extends RemoteAccessResourceKind> {\n    readonly name: string;\n    readonly resource: K;\n    readonly actions: readonly RemoteAccessAction[];\n}',
   },
   {
+    name: 'RemoteComputer',
+    declaration: 'export interface RemoteComputer {\n    readonly id: ComputerId;\n    readonly name: string;\n    readonly host: string;\n    readonly port: number;\n    readonly username: string;\n    readonly identityFile?: string;\n    readonly fingerprint: string;\n    readonly platform?: \'linux\' | \'win32\';\n    readonly home?: string;\n}',
+  },
+  {
+    name: 'RemoteConnection',
+    declaration: 'export class RemoteConnection {\n    platform: RemotePlatform | undefined;\n    constructor(private identity: ConnectComputerRequest & {\n        id: NonNullable<ConnectComputerRequest[\'id\']>;\n    }, private readonly privateKey: string, private readonly install: InstallConfig, private readonly timeoutMs: number, private readonly reconnectDelayMs: number, private readonly changed: (status: ComputerState[\'status\'], error?: string) => void);\n    get closed(): boolean;\n    reconfigure(identity: ConnectComputerRequest & {\n        id: NonNullable<ConnectComputerRequest[\'id\']>;\n    }): void;\n    connect(): Promise<Hello>;\n    async suspend(): Promise<void>;\n    request<T>(method: string, params: unknown, schema: z.ZodType<T>, signal?: AbortSignal, observation: boolean = false): Promise<T>;\n    async close(): Promise<void>;\n}',
+  },
+  {
     name: 'RemoteError',
     declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends Error {\n    readonly isDSHRemoteError: true;\n    constructor(readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
@@ -7919,6 +8060,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RemoteEventHostInfo',
     declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
+  },
+  {
+    name: 'RemoteFileSystem',
+    declaration: 'export class RemoteFileSystem extends SshFileSystem {\n    static override inject;\n    constructor(ctx: Context, private readonly remote: {\n        computerId: ComputerId;\n    });\n    override processPath(target: FsTarget): string;\n    override fileUrl(target: FsTarget): string;\n    override contains(parent: FsTarget, child: FsTarget): boolean;\n    override async readText(target: FsTarget, signal?: AbortSignal): Promise<string>;\n    override async readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>;\n    override streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>>;\n    override async watch(target: FsTarget, changed: (error?: Error) => void, signal: AbortSignal): Promise<() => Promise<void>>;\n}',
+  },
+  {
+    name: 'RemotePlatform',
+    declaration: 'export interface RemotePlatform {\n    readonly platform: \'linux\' | \'win32\';\n    readonly arch: \'x64\' | \'arm64\';\n    readonly home: string;\n    readonly root: string;\n}',
   },
   {
     name: 'RemoteStream',
@@ -9151,6 +9300,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SpillSource',
     declaration: 'export type SpillSource = {\n    kind: \'tool\';\n    toolName: string;\n    callId: ToolCallId;\n    label: string;\n} | {\n    kind: \'session-reference\';\n    sessionId: SessionId;\n    label: string;\n};',
+  },
+  {
+    name: 'SshFileSystem',
+    declaration: 'export class SshFileSystem extends FileSystem {\n    static inject;\n    override get sandboxMode(): SandboxMode;\n    override async resolve(path: string, opts?: {\n        cwd?: string;\n        signal?: AbortSignal;\n    }): Promise<FsTarget>;\n    override processPath(target: FsTarget): string;\n    override fileUrl(target: FsTarget): string;\n    override contains(parent: FsTarget, child: FsTarget): boolean;\n    override async stat(target: FsTarget, signal?: AbortSignal): Promise<FsInfo | undefined>;\n    override async lstat(path: string, opts?: {\n        cwd?: string;\n    }, signal?: AbortSignal): Promise<FsPathInfo | undefined>;\n    override readText(target: FsTarget, signal?: AbortSignal): Promise<string>;\n    override async streamText(target: FsTarget, signal?: AbortSignal): Promise<AsyncIterable<string>>;\n    override async readBytes(target: FsTarget, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>;\n    override async readByteRange(target: FsTarget, range: {\n        offset: number;\n        length: number;\n    }, signal?: AbortSignal): Promise<Uint8Array>;\n    override async listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>;\n    override async writeText(target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy): Promise<FsWriteOutcome>;\n    override async editText(target: FsTarget, edit: FsEditRequest, expected?: {\n        version: FsVersion;\n    }, signal?: AbortSigna /* …truncated — full shape in source */',
   },
   {
     name: 'SshStreamEndpoint',

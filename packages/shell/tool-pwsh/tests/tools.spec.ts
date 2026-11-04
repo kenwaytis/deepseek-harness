@@ -15,6 +15,7 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
@@ -360,6 +361,25 @@ async function callUntilText(
 }
 
 describe('registration', () => {
+  it.each(['posix', 'windows'] as const)('selects PowerShell from the Session execution platform %s', async (platform) => {
+    const { ctx } = await setup({ nativePlatformOnly: true })
+    try {
+      await ctx.plugin(LocalSubprocessRuntime)
+      vi.spyOn(ctx.subprocess, 'terminalEnvironment').mockResolvedValue({ platform: 'posix' })
+      const agent = await registerFakeAgent(ctx, 'native-platform')
+      const execution = ctx.isolate('subprocess')
+      await execution.plugin(LocalSubprocessRuntime)
+      vi.spyOn(execution.subprocess, 'terminalEnvironment').mockResolvedValue({ platform })
+      ctx.effect(() => ctx.agents.registerExecutionContext(agent, execution))
+      const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
+      try {
+        expect(ctx.tools.schemas(agent, toolSet).some(tool => tool.name === 'pwsh')).toBe(platform === 'windows')
+        const prompt = await ctx.systemPrompt.assemble({ scope: agent, toolSet })
+        expect(prompt.sections.some(section => section.name === 'tool:pwsh' && section.text.length > 0)).toBe(platform === 'windows')
+      } finally { toolSet.dispose() }
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it.each([
     ['foreground-only', setup],
     ['job-backed', setupWithJobs],

@@ -1,0 +1,33 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/tools" },
+    { "path": "../../util/brand" },
+    { "path": "../../util/workspace-path" },
+    { "path": "../../fs/fs" },
+    { "path": "../../fs/fs-sandbox" },
+    { "path": "../fs-ssh" },
+    { "path": "../ssh" },
+    { "path": "../../subprocess/subprocess" },
+    { "path": "../../subprocess/subprocess-local" },
+    { "path": "../../shell/shell" },
+    { "path": "../../shell/bash-sandbox" },
+    { "path": "../../shell/pwsh-sandbox" },
+    { "path": "../../preset/agent-preset-registry" },
+    { "path": "../../sandbox/sandbox" },
+    { "path": "../../sandbox/sandbox-local" },
+    { "path": "../../sandbox/sandbox-policy" },
+    { "path": "../../core/session" },
+    { "path": "../../session/session-projection" },
+    { "path": "../../session/working-directory" },
+    { "path": "../../storage/storage-domain" },
+    { "path": "../../typert/protocol" },
+    { "path": "../../workspace/workspace" },
+    { "path": "../../api/session-controller/tsconfig.host.json" }
+  ]
+}
