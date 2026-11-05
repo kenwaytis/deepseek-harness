@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { createRuntimeProjectMetadata } from '../src/project-manager.ts'
+import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
 import {
   DESKTOP_PACKAGES_DIR,
   DESKTOP_PACKAGE_SET_FILE,
@@ -66,6 +68,21 @@ describe('desktop core package set', () => {
       '@deepseek-ai/dsh-base': 'file:./desktop-packages/dsh-base.tgz',
       '@deepseek-ai/dsh-desktop-host': 'file:./desktop-packages/dsh-desktop-host.tgz',
     })
+  })
+
+  it('explicitly denies optional SSH native build scripts in runtime and checkout policies', () => {
+    const { root } = packageSetProject()
+    createRuntimeProjectMetadata(root, {
+      schemaVersion: 1, version: '1.2.3', nodeVersion: '24.17.0',
+      pnpmVersion: '11.7.0', hostProtocolVersion: DESKTOP_HOST_PROTOCOL_VERSION,
+    })
+    const runtimePolicy = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8')
+    const checkoutPolicy = readFileSync(new URL('../../../pnpm-workspace.yaml', import.meta.url), 'utf8')
+    for (const policy of [runtimePolicy, checkoutPolicy]) {
+      expect(policy).toContain('\n  ssh2: false\n')
+      expect(policy).toContain('\n  cpu-features: false\n')
+      expect(policy).not.toContain('dangerouslyAllowAllBuilds')
+    }
   })
 
   it('rejects version drift, descriptor disorder, corruption, and extra files', () => {

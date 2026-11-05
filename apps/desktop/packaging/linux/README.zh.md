@@ -83,6 +83,8 @@ pnpm run package:desktop:linux:x64:appimage
 
 命令先构建仓库，准备锁定的 Electron 与 Primary Runtime，生成生产包，组装 `linux-unpacked`，校验归档并运行原生模块、Host 和 Office Smoke，再用锁定的 electron-builder 打包已验证目录。任一阶段失败立即停止，绝不上传产物。未缓存的构建输入需要联网；每次重新解析生产依赖仍有共享 Desktop 流程现有的可复现性限制。
 
+生产安装明确禁用 `ssh2` 和 `cpu-features` 的可选原生构建脚本。SSH 使用依赖支持的 Node 实现，不依赖这些加速器；其他依赖脚本仍逐项保留允许或拒绝决定。
+
 产物为 `apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/deepseek-harness-<version>-linux-x86_64-unsigned.AppImage`。`--check` 只检查配置和工具，不构建；`pnpm run package:desktop:linux:x64:dir` 则停在可运行目录。两者都忽略发布 dotenv 文件及继承的签名/更新设置。版本默认来自产品 manifest（元数据清单）；`--build-version` 接受既有 Desktop 构建版本格式。包内 manifest 记录 `dshBuildCommit` 和 `dshBuildDirty`；阶段日志保留在 `.desktop-build/packaging-runs/`。
 
 <a id="runtime-layout-and-verification"></a>

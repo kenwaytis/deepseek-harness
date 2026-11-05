@@ -83,6 +83,8 @@ pnpm run package:desktop:linux:x64:appimage
 
 The command builds the repository, prepares the pinned Electron and primary runtime, materializes production packages, assembles `linux-unpacked`, verifies its archive and runs native/Host/Office smoke checks, then packages that verified directory with the locked electron-builder. It stops on any failed stage and never uploads artifacts. Network access is needed for uncached build inputs; the fresh production dependency resolution retains the shared Desktop pipeline's reproducibility limits.
 
+Production installation explicitly disables the optional `ssh2` and `cpu-features` native build scripts. SSH uses the dependency's supported Node implementation without those accelerators; other dependency scripts retain their individual allow/deny decisions.
+
 The output is `apps/desktop/.desktop-build/targets/linux-x64/unsigned-artifacts/deepseek-harness-<version>-linux-x86_64-unsigned.AppImage`. `--check` validates configuration/tooling without building; `pnpm run package:desktop:linux:x64:dir` stops at the runnable directory. Both ignore release dotenv files and inherited signing/update settings. Version defaults to the product manifest; `--build-version` accepts the existing Desktop build-version format. The packaged manifest records `dshBuildCommit` and `dshBuildDirty`; stage logs remain under `.desktop-build/packaging-runs/`.
 
 <a id="runtime-layout-and-verification"></a>
