@@ -66,15 +66,17 @@ Electron starts the private Desktop Host with bundled standalone Node on Linux a
 
 ## Events
 
-Events are the extension points, and picking the right domain is the first decision in most changes.
+Events provide extension points in three domains.
 
 - **Session events** are durable facts appended to the log and broadcast through `session/event`. Use one when the fact must survive a reload.
 - **Agent events** (`agent/*`) carry a live `Agent`: inbox, step, status, request, validation, continuation. Use one to observe or intercept work in flight.
 - **Capability events** attach policy and adapters to a seam (`fs/*`, `tools/*`, `telemetry/*`) without importing the loop.
 
-AgentLoop initializes Agents with rollback and awaits serial `agent/created` before queued work. Unload retains resources through Agent teardown; [agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) defines ordering.
+Subagent Activations own runtime tree membership.
 
-The [event map](event-producer-consumer.md) lists every event's producers and consumers.
+AgentLoop rolls back failed initialization and awaits serial `agent/created` before queued work; unload retains resources through teardown ([ordering](../packages/core/agent-loop/README.md#understand-the-implementation)).
+
+[Event producers and consumers](event-producer-consumer.md).
 
 ## Turn flow
 
@@ -137,7 +139,7 @@ A **seam** is a swappable capability with three roles: a **Service Definition** 
 
 Execution consumers select the Session's providers. [Remote work](../packages/ssh/remote-work/README.md) binds filesystem, subprocess, sandbox, and shell execution per Agent while model connections, MCP, and persistence stay local. [Subagent providers](subsystems/subagent.md) likewise share one interface, from a fresh child Agent to delegation to another product.
 
-[Experimental Agent Teams](subsystems/agent-team.md) exposes opt-in `ctx.agentTeams` coordination with durable roster and task state plus direct inbox messaging over continuable subagents.
+[Agent Teams](subsystems/agent-team.md) adds task policy and a shared task board when enabled for a root Session. Ordinary subagent controls own identity, messaging, discovery, interruption, and inbox waiting.
 
 ## Where new behavior goes
 

@@ -31,7 +31,7 @@ kind: "package-reference"
 
 执行提供者可通过 `registerExecutionContext()` 按 Agent 绑定。执行消费者使用 `executionContext()`，模型适配器、MCP 和持久化则保留本机 Agent 上下文。绑定的所有者负责调用其释放器。若 Session 使用 `dsh-*` 执行 URI 却没有注册的执行提供者，则直接失败，不使用本机执行；[远程工作](../../ssh/remote-work/README.zh.md)提供 SSH 绑定。
 
-`ctx.agents.create()` 在一个身份下构建全新 agent 与会话；`ctx.agents.resume()` 加载持久化会话并在此基础上重建 agent。两者都委托给已注册工厂，并返回 `AgentHandle`——唯一能拆除该 agent 的对象。发布和失败清理的时序见 [`AgentFactory`](src/index.ts)。在任一操作的 options 中设置 `parentAgent`，可使结果成为运行时子级；省略它则得到运行时根级。`get(id)`、`list()` 与 `roots()` 用于查找实时 agent；`isOwnedBy(id, parent)` 用于检验这项确切的实时所有权关系。
+`ctx.agents.create()` 在一个身份下构建全新 agent 与会话；`ctx.agents.resume()` 加载持久化会话并在此基础上重建 agent。两者都委托给已注册工厂，并返回 `AgentHandle`——唯一能拆除该 agent 的对象。发布和失败清理的时序见 [`AgentFactory`](src/index.ts)。`get(id)` 与 `list()` 用于查找实时 agent。[subagent 服务](../../subagent/subagent/README.zh.md) 拥有委派执行和运行时树成员关系。
 
 ```text
 const handle = await ctx.agents.create({

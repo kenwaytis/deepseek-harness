@@ -68,15 +68,17 @@ Electron 在 Linux 上使用内置独立 Node，在 macOS 和 Windows 上使用 
 
 ## 事件
 
-事件就是扩展点，而选对事件域是大多数改动的第一个决定。
+事件在三个域内提供扩展点。
 
 - **会话事件**是追加到日志并通过 `session/event` 广播的持久事实。当某个事实必须在重新加载后仍然存在时，使用它。
 - **Agent 事件**（`agent/*`）携带活跃 `Agent`：inbox、步骤、状态、请求、验证、续跑。要观察或拦截进行中的工作时，使用它。
 - **能力事件**无需导入循环即可向某个 seam（`fs/*`、`tools/*`、`telemetry/*`）附加策略和适配器。
 
-AgentLoop 初始化 Agent，失败则回滚，并在启动已排队工作前等待串行 `agent/created`。卸载在 Agent teardown 期间保留所需资源；[agent-loop](../packages/core/agent-loop/README.zh.md#understand-the-implementation)定义顺序。
+Subagent Activation 拥有运行时树成员关系。
 
-[事件映射](event-producer-consumer.zh.md)列出每个事件的生产方与消费方。
+AgentLoop 回滚失败的初始化，并在启动已排队工作前等待串行 `agent/created`；卸载在 teardown 期间保留所需资源（[顺序](../packages/core/agent-loop/README.zh.md#understand-the-implementation)）。
+
+[事件生产者与消费者](event-producer-consumer.zh.md)。
 
 <a id="turn-flow"></a>
 
@@ -141,7 +143,7 @@ Session 消费方只了解当前逻辑格式。仅 header 的 `stat` 与 `list` 
 
 执行消费者选择 Session 的提供者。[远程工作](../packages/ssh/remote-work/README.zh.md)按 Agent 绑定文件系统、子进程、沙箱和 Shell 执行，模型连接、MCP 与持久化仍留在本机。[subagent 提供方](subsystems/subagent.zh.md)同样共享一个接口，从新建子 Agent 到委派给另一个产品。
 
-[实验性 Agent Teams](subsystems/agent-team.zh.md) 通过显式启用的 `ctx.agentTeams`，在可继续 subagent 之上提供持久 roster、任务状态和直接 inbox 消息协作。
+[Agent Teams](subsystems/agent-team.zh.md)在根 Session 开启后提供任务策略和共享任务板。普通 subagent 控制工具负责身份、通信、发现、中断和收件箱等待。
 
 ## 新行为的归属位置
 
