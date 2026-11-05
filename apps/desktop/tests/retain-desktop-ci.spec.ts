@@ -13,6 +13,8 @@ const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 
 it('rejects Linux local builds before reading publication configuration', async () => {
+  expect(() => resolveDesktopRetentionRunner({ DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: 'x64' }))
+    .toThrow('Linux local builds cannot be published')
   await expect(retainDesktopCi({ DSH_DESKTOP_TARGET_PLATFORM: 'linux', DSH_DESKTOP_TARGET_ARCH: 'x64' }))
     .rejects.toThrow('Linux local builds cannot be published')
 })

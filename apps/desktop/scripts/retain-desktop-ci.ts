@@ -31,9 +31,11 @@ export function desktopReleasesRoot(env: NodeJS.ProcessEnv): string {
  * Resolve the original machine's unique label before expensive packaging work.
  * @param env Machine identity, target and administrator-owned runner mapping.
  * @returns The exact label used by the later GitHub archival job.
+ * @throws When a local-only Linux build requests publication routing.
  */
 export function resolveDesktopRetentionRunner(env: NodeJS.ProcessEnv): string {
   const target = resolveDesktopBuildTarget(env)
+  if (target === 'linux-x64') throw new Error('desktop retention: Linux local builds cannot be published')
   const routes = desktopPublishRunnersSchema.parse(JSON.parse(required(env, 'DESKTOP_PUBLISH_RUNNERS')))
   const route = routes[required(env, 'RUNNER_NAME')]
   if (!route || !route.target.includes(target)
