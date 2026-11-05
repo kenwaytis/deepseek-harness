@@ -93,7 +93,7 @@ Liveshare 服务端地址在首次使用时设置：在分享弹窗的地址输�
 附件上传既不是档位，也不属于分叉开关：它跟随可见性。无论分享处于哪个档位、是否允许分叉，已准入的查看者都可以向共享会话以及自己通过本分享分叉出的会话上传附件。所有者没有单独的附件开关。
 
 
-可分享给 viewer 的方法是已安装插件注册的 Remote 方法，由 Host 的 Typert registry 在 [`shareable-catalog.ts`](src/host/shareable-catalog.ts) 动态枚举。DSH 核心服务命名空间被排除（[`EXCLUDED_SHARE_NAMESPACES`](src/host/shareable-catalog.ts) 列出这些命名空间），插件管理器报告为核心 profile bundle 组件的插件也被排除；其他用户安装的插件和 DSH 实验性插件保留。所有者可以一次性开放全部已安装插件，也可以按插件设为不可用、全部方法或部分方法。这里没有读写之分：只有当前目录与该 share 的策略同时点名某个方法、且资源对读者可见时，该方法才可被调用。
+可分享给 viewer 的方法是已安装插件注册的 Remote 方法，由 Host 的 Typert registry 在 [`shareable-catalog.ts`](src/host/shareable-catalog.ts) 动态枚举。DSH 核心服务命名空间（包括 SSH 电脑管理 `remoteWork`）被排除（[`EXCLUDED_SHARE_NAMESPACES`](src/host/shareable-catalog.ts) 列出这些命名空间），插件管理器报告为核心 profile bundle 组件的插件也被排除；其他用户安装的插件和 DSH 实验性插件保留。所有者可以一次性开放全部已安装插件，也可以按插件设为不可用、全部方法或部分方法。这里没有读写之分：只有当前目录与该 share 的策略同时点名某个方法、且资源对读者可见时，该方法才可被调用。
 
 Owner Gateway 按调用指明的 Session 与工作区判定每次调用，并拒绝目标缺失或无效的调用。查看页的会话列表和工作区成员裁剪为源会话及该查看者自己的分叉会话。页面从读者的访问快照读取每个会话自己的答案，因此切换选择不会把前一会话的权限带过去。未知或无法读取的模式默认拒绝。Owner 为源会话与分叉会话调用重新检查准入；撤权会取消受影响的调用和流，分享准入收窄时还会停止共享会话正在运行的轮次。页面区分认证、访问、过期、停止分享、所有者离线和传输失败，仅重试明确分类为可重试的失败。
 
