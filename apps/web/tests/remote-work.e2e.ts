@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Browser } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { z } from 'zod'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type {} from '@deepseek-ai/dsh-remote-work'
 import { remoteDirectoryOf } from '@deepseek-ai/dsh-util-workspace-path'
 import { SshSession, powershell, psQuote, shQuote } from '@deepseek-ai/dsh-remote-work/src/ssh-session.ts'
@@ -215,6 +216,20 @@ it.skipIf(host === undefined)(
       'remote-command-ok',
     )
     await expect(access(join(app.workspaceCwd, 'runtime-command.txt'))).rejects.toThrow()
+    await app.ctx.sessions.flush(agent.session)
+    const reader = new Context()
+    try {
+      await reader.plugin(JsonlSessionPersistence, { root: app.persistenceRoot })
+      const history = await reader.sessionPersistence.open(sessionId, 'read')
+      try {
+        expect(history.header.cwd).toBe(agent.session.header.cwd)
+        expect((await history.read()).events).toEqual(agent.session.snapshotEvents())
+      } finally {
+        await history.close()
+      }
+    } finally {
+      await reader.fiber.dispose()
+    }
   },
   240_000,
 )

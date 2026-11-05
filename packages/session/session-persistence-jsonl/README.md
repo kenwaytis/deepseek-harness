@@ -70,7 +70,7 @@ Each session gets a session-owned directory under a readable project directory. 
       session.v3.jsonl           # released v3/current, raw root; later versions use vN
 ```
 
-Session ids are injectively escaped to one safe path segment before use (no traversal, no collision). The normalized cwd keeps the project directory readable for navigation; cwd strings that normalize alike share a project directory while session ids still select distinct session directories. Runtime operations select the numerically highest canonical generation, and format-refusal diagnostics name that absolute path so an operator can find the raw log a build refused to interpret.
+Session ids are injectively escaped to one safe path segment before use (no traversal, no collision). The normalized cwd keeps the project directory readable for navigation; cwd strings that normalize alike share a project directory while session ids still select distinct session directories. Current headers accept native absolute directories and execution addresses such as `dsh-ssh://`; both retain their exact cwd across reopen, and the configured root stores the logs independently of the execution computer. Runtime operations select the numerically highest canonical generation, and format-refusal diagnostics name that absolute path so an operator can find the raw log a build refused to interpret.
 
 ### Durability and crash semantics
 

@@ -187,6 +187,26 @@ describe('WorkspaceBrowser', () => {
     })
     expect(within(screen.getByRole('group', { name: '本机' })).getByText('local')).toBeTruthy()
     const remote = screen.getByRole('group', { name: computer.name })
+    expect(within(remote).getByRole('img', { name: '已连接' })).toBeTruthy()
+    expect(within(remote).queryByRole('status')).toBeNull()
+    const header = screen.getByRole('button', { name: computer.name }).parentElement!
+    expect({
+      controls: Array.from(header.querySelectorAll('button, [role="img"]'), control => control.getAttribute('aria-label') ?? control.textContent),
+      statusRows: within(remote).queryAllByRole('status').length,
+    }).toMatchInlineSnapshot(`
+      {
+        "controls": [
+          "Windows workstation",
+          "管理“Windows workstation”的连接",
+          "已连接",
+          "在“Windows workstation”中添加文件夹",
+        ],
+        "statusRows": 0,
+      }
+    `)
+    fireEvent.click(within(remote).getByRole('button', { name: `管理“${computer.name}”的连接` }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
     expect(within(remote).getByText('Remote folder')).toBeTruthy()
     expect(within(remote).queryByText('local')).toBeNull()
     fireEvent.click(within(remote).getByText('Remote folder'))

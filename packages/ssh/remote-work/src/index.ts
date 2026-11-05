@@ -311,6 +311,12 @@ export class RemoteWorkService extends TypertRemoteService {
     this.table = domain.table('computers')
     for (const [id, record] of this.table.entries())
       this.states.set(id, { computer: publicComputer(id, record), status: 'disconnected' })
+    for (const id of this.states.keys()) {
+      void this.connection(id).connect().catch((error: unknown) => {
+        if (!this.lifecycle.signal.aborted)
+          this.ownerContext.logger.warn(`Could not reconnect remote computer ${id} at startup; reconnect from its connection controls`, error)
+      })
+    }
   }
 
   /** Read saved computer identities and connection state.

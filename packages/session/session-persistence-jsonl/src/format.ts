@@ -8,7 +8,7 @@
  * @module dsh-session-persistence-jsonl/format
  */
 
-import { isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 import {
   SESSION_FORMAT_VERSION,
   KNOWN_SESSION_EVENT_TYPES,
@@ -24,7 +24,7 @@ import { parseSessionFormatLogFilename, sessionFormatLogFilename, SessionFormatU
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import type { SessionFormatRecovery, SessionFormatRestore } from '@deepseek-ai/dsh-session-format'
 import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
-import { assertV4RowAdmission, assertReleasedV4Relationships } from '@deepseek-ai/dsh-session-format-v3-to-v4'
+import { assertV4RowAdmission, assertReleasedV4Header, assertReleasedV4Relationships } from '@deepseek-ai/dsh-session-format-v3-to-v4'
 import {
   SessionFormatUnsupportedError,
   sessionFormatVersionRefusal,
@@ -93,10 +93,6 @@ interface HeaderLine {
   agentPreset?: string
 }
 
-const HEADER_REQUIRED_KEYS = ['type', 'version', 'id', 'createdAt', 'isSeeded', 'delegationDepth'] as const
-const HEADER_OPTIONAL_KEYS = ['cwd', 'parentSession', 'origin', 'agentPreset'] as const
-const HEADER_KEYS = new Set<string>([...HEADER_REQUIRED_KEYS, ...HEADER_OPTIONAL_KEYS])
-
 /**
  * Refuse policy fields that never belong to a released Session header.
  * @param value - parsed physical header candidate.
@@ -157,32 +153,16 @@ function fromHeaderLine(line: HeaderLine): SessionStorageMetadata {
 
 /** Type guard: a parsed first line is a well-formed session header. */
 function isHeaderLine(value: unknown): value is HeaderLine {
-  return (
-    typeof value === 'object' && value !== null && !Array.isArray(value)
-    && HEADER_REQUIRED_KEYS.every(key => Object.hasOwn(value, key))
-    && Object.keys(value).every(key => HEADER_KEYS.has(key))
-    && (value as { type?: unknown }).type === 'session'
-    && typeof (value as { version?: unknown }).version === 'number'
-    && typeof (value as { id?: unknown }).id === 'string'
-    && typeof (value as { createdAt?: unknown }).createdAt === 'number'
-    && Number.isSafeInteger((value as { createdAt: number }).createdAt)
-    && (value as { createdAt: number }).createdAt >= 0
-    && !Object.is((value as { createdAt: number }).createdAt, -0)
-    && typeof (value as { delegationDepth?: unknown }).delegationDepth === 'number'
-    && Number.isSafeInteger((value as { delegationDepth: number }).delegationDepth)
-    && (value as { delegationDepth: number }).delegationDepth >= 0
-    && !Object.is((value as { delegationDepth: number }).delegationDepth, -0)
-    && ((value as { cwd?: unknown }).cwd === undefined
-      || (typeof (value as { cwd?: unknown }).cwd === 'string'
-        && isAbsolute((value as { cwd: string }).cwd)))
-    && ((value as { parentSession?: unknown }).parentSession === undefined
-      || typeof (value as { parentSession?: unknown }).parentSession === 'string')
-    && typeof (value as { isSeeded?: unknown }).isSeeded === 'boolean'
-    && ((value as { origin?: unknown }).origin === undefined
-      || (value as { origin?: unknown }).origin === 'subagent')
-    && ((value as { agentPreset?: unknown }).agentPreset === undefined
-      || typeof (value as { agentPreset?: unknown }).agentPreset === 'string')
-  )
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const { type, ...header } = value as Record<string, unknown>
+  if (type !== 'session') return false
+  try {
+    assertReleasedV4Header(header)
+    return true
+  } catch (_error) {
+    // Header validation failures are reported by the scanner as corrupt records.
+    return false
+  }
 }
 
 /**

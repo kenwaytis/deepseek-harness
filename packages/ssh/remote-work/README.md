@@ -32,7 +32,7 @@ The shipped Web and Desktop compositions include remote work. In the sidebar, ch
 
 The target needs SSH command execution, SFTP, and TCP forwarding to its own loopback interface. Linux installation uses a standard shell, `tar`, `sha256sum`, and `nohup`; native Windows uses PowerShell, `tar.exe`, and OpenSSH. The local Host downloads Node and target native dependencies over HTTPS, verifies checksums, and uploads the payload. Allow local access to the configured distribution and registry URLs. Confirm the fingerprint through an independent trusted channel before installation.
 
-Authentication tries the local SSH agent and available default private keys, or an explicit `identityFile`; a supplied password is memory-only. Unlock encrypted keys in the SSH agent. The password field does not supply a private-key passphrase. A saved computer cannot be moved to another host, port, or SSH account; create another computer registration instead.
+Authentication tries the local SSH agent and available default private keys, or an explicit `identityFile`; a supplied password is memory-only. At startup, the Host attempts each saved connection once in the background without delaying the interface. A failed attempt leaves the computer registered and exposes the error in its status tooltip; use its connection controls to retry or supply a password. Unlock encrypted keys in the SSH agent. The password field does not supply a private-key passphrase. A saved computer cannot be moved to another host, port, or SSH account; create another computer registration instead.
 
 ### Configuration
 
@@ -59,7 +59,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Interruption and recovery
 
-Connection loss pauses new model steps and remote observations while the Host reconnects. Existing command and terminal processes belong to the remote Runtime, not the SSH transport. Reconnection attaches to their retained output and state. Explicit command deadlines and user cancellation still apply. Disconnecting a computer suspends its attachment until it is connected again; it does not stop remote tasks.
+Connection loss pauses new model steps and remote observations while the Host reconnects. Existing command and terminal processes belong to the remote Runtime, not the SSH transport. Reconnection attaches to their retained output and state. Explicit command deadlines and user cancellation still apply. Disconnecting a computer suspends its attachment until it is connected again or the application restarts; it does not stop remote tasks.
 
 A mutation receives an operation ID before transmission. After an interrupted reply, the Host retrieves that operation's result without resubmitting it. A missing result or replaced Runtime reports `REMOTE_OUTCOME_UNKNOWN`; inspect the remote files or process before deciding whether to retry. Terminal input follows the same rule. Output truncation is reported, and completed records have bounded retention. Runtime restart, remote reboot, and a different payload generation do not preserve in-memory task recovery.
 

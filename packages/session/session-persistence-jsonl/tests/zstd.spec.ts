@@ -375,6 +375,36 @@ describe('Zstandard frame structure', () => {
 })
 
 describe('JsonlSessionPersistence: default Zstandard encoding', () => {
+  it.each(['zstd', 'none'] as const)('reopens local history for remote directories after restart (%s)', async (compression) => {
+    const root = await freshRoot()
+    const writer = await mount(root, compression)
+    const paths = [
+      'dsh-ssh://e7250a7e-8bdf-4a6f-942c-cb3e2cdb0b02/D%3A%5Cproject%5Cwork',
+      'dsh-ssh://e7250a7e-8bdf-4a6f-942c-cb3e2cdb0b02/%2Fhome%2Fuser%2Fwork',
+    ]
+    const events = oneTurnLog()
+    const headers = paths.map((path, index) => meta(`remote-history-${index}`, path))
+    for (const header of headers) await writeLog(writer.sessionPersistence, header, events)
+    await writer.fiber.dispose()
+
+    const reader = await mount(root, compression)
+    for (const header of headers) {
+      const path = logPath(root, header.cwd, header.id, compression)
+      const stored = await readFile(path)
+      expect((await reader.sessionPersistence.stat(header.id))?.header.cwd).toBe(header.cwd)
+      expect((await reader.sessionPersistence.list()).find(row => row.header.id === header.id)?.header.cwd).toBe(header.cwd)
+      expect(await readAll(reader.sessionPersistence, header.id)).toMatchObject({ meta: header, events })
+      const resumed = await reader.sessionPersistence.open(header.id, 'write')
+      try {
+        expect(resumed.header.cwd).toBe(header.cwd)
+        expect((await resumed.read()).events).toEqual(events)
+      } finally {
+        await resumed.close()
+      }
+      expect(await readFile(path)).toEqual(stored)
+    }
+  })
+
   it('materializes an explicitly durable empty session as one header frame', async () => {
     const root = await freshRoot()
     const ctx = await mount(root)

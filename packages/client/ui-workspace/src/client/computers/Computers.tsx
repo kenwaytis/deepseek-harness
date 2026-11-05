@@ -45,52 +45,45 @@ export function ComputerHeader({
       ? t(computerId === undefined ? 'computer.status.local' : 'computer.status.unavailable')
       : t(`computer.status.${computer.status}`)
   return (
-    <>
-      <div className={css.header} data-row-key={`computer:${computer?.computer.id ?? computerId ?? 'local'}`}>
-        <button type="button" className={css.disclosure} aria-expanded={expanded} onClick={onToggle}>
-          {expanded ? <IconChevronDownOutlineRegular /> : <IconChevronRightOutlineRegular />}
-          <IconGlobeOutlineRegular />
-          <span className={css.title}>{title}</span>
-        </button>
-        <Tooltip label={computer?.error ?? status} portal>
-          <span
-            className={css.status}
-            data-status={computer?.status ?? (computerId === undefined ? 'connected' : 'disconnected')}
-            aria-label={status}
-            role="img"
-          />
+    <div className={css.header} data-row-key={`computer:${computer?.computer.id ?? computerId ?? 'local'}`}>
+      <button type="button" className={css.disclosure} aria-expanded={expanded} onClick={onToggle}>
+        {expanded ? <IconChevronDownOutlineRegular /> : <IconChevronRightOutlineRegular />}
+        <IconGlobeOutlineRegular />
+        <span className={css.title}>{title}</span>
+      </button>
+      {onManage !== undefined && (
+        <Tooltip label={t('computer.manage')} portal>
+          <button
+            type="button"
+            className={css.iconButton}
+            aria-label={t('computer.manageNamed', { name: title })}
+            onClick={onManage}
+          >
+            <IconEllipsisOutlineRegular />
+          </button>
         </Tooltip>
-        {onAdd !== undefined && (
-          <Tooltip label={t('computer.addFolder')} portal>
-            <button
-              type="button"
-              className={css.iconButton}
-              aria-label={t('computer.addFolderTo', { name: title })}
-              onClick={onAdd}
-            >
-              <IconPlusOutlineRegular />
-            </button>
-          </Tooltip>
-        )}
-        {onManage !== undefined && (
-          <Tooltip label={t('computer.manage')} portal>
-            <button
-              type="button"
-              className={css.iconButton}
-              aria-label={t('computer.manageNamed', { name: title })}
-              onClick={onManage}
-            >
-              <IconEllipsisOutlineRegular />
-            </button>
-          </Tooltip>
-        )}
-      </div>
-      {computer !== undefined && (
-        <div className={css.connectionNotice} role="status">
-          {status}
-        </div>
       )}
-    </>
+      <Tooltip label={computer?.error ?? status} portal>
+        <span
+          className={css.status}
+          data-status={computer?.status ?? (computerId === undefined ? 'connected' : 'disconnected')}
+          aria-label={status}
+          role="img"
+        />
+      </Tooltip>
+      {onAdd !== undefined && (
+        <Tooltip label={t('computer.addFolder')} portal>
+          <button
+            type="button"
+            className={css.iconButton}
+            aria-label={t('computer.addFolderTo', { name: title })}
+            onClick={onAdd}
+          >
+            <IconPlusOutlineRegular />
+          </button>
+        </Tooltip>
+      )}
+    </div>
   )
 }
 
